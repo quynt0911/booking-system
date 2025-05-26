@@ -1,4 +1,70 @@
-version: "3"
+# version: "3"
+
+# services:
+#   database:
+#     image: postgis/postgis:13-master
+#     volumes:
+#       - ./data/database:/var/lib/postgresql/data
+#     environment:
+#       POSTGRES_USER: ${POSTGRES_USER}
+#       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#       POSTGRES_DB: ${POSTGRES_DB}
+#     healthcheck:
+#       test: ["CMD", "pg_isready", "--host=localhost", "--username=${POSTGRES_USER}"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+#       start_interval: 5s
+#       start_period: 30s
+
+#   cache:
+#     image: redis:6
+#     healthcheck:
+#       test: ["CMD-SHELL", "[ $$(redis-cli ping) = 'PONG' ]"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+#       start_interval: 5s
+#       start_period: 30s
+
+#   directus:
+#     image: directus/directus:11.5.1
+#     ports:
+#       - 8055:8055
+#     volumes:
+#       - ./uploads:/directus/uploads
+#       - ./extensions:/directus/extensions
+#     depends_on:
+#       database:
+#         condition: service_healthy
+#       cache:
+#         condition: service_healthy
+#     environment:
+#       SECRET: ${DIRECTUS_SECRET}
+
+#       DB_CLIENT: "pg"
+#       DB_HOST: "database"
+#       DB_PORT: "5432"
+#       DB_DATABASE: ${POSTGRES_DB}
+#       DB_USER: ${POSTGRES_USER}
+#       DB_PASSWORD: ${POSTGRES_PASSWORD}
+
+#       CACHE_ENABLED: "true"
+#       CACHE_AUTO_PURGE: "true"
+#       CACHE_STORE: "redis"
+#       REDIS: ${REDIS_URL}
+
+#       ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+#       ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+
+#       PUBLIC_URL: ${PUBLIC_URL}
+
+
+
+
+
+
+version: "3.8"
 
 services:
   database:
@@ -10,7 +76,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     healthcheck:
-      test: ["CMD", "pg_isready", "--host=localhost", "--username=${POSTGRES_USER}"]
+      test: ["CMD", "pg_isready", "--host=database", "--username=${POSTGRES_USER}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -58,3 +124,16 @@ services:
       ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
 
       PUBLIC_URL: ${PUBLIC_URL}
+
+  user-service:
+    build:
+      context: ./user-services
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      POSTGRES_HOST: database
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
