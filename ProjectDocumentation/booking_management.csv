@@ -1,0 +1,47 @@
+Sprint,Tuần,Công việc,Service,Thành viên phụ trách,Ưu tiên,Trạng thái,Phụ thuộc,Ghi chú
+Sprint 1,1,Setup Docker Environment,Infrastructure,Huy,Cao,Chưa bắt đầu,,Cần setup PostgreSQL và Redis
+Sprint 1,1,Setup PostgreSQL Database,Infrastructure,Huy,Cao,Chưa bắt đầu,Setup Docker Environment,
+Sprint 1,1,Setup Redis Cache,Infrastructure,Huy,Cao,Chưa bắt đầu,Setup Docker Environment,
+Sprint 1,1,Setup Nginx Load Balancer,Infrastructure,Linh,Trung bình,Chưa bắt đầu,,
+Sprint 1,1,API Gateway Skeleton,api-gateway,Linh,Cao,Chưa bắt đầu,Setup Nginx Load Balancer,
+Sprint 1,1,Setup Directus CMS,cms/directus,Thịnh,Cao,Chưa bắt đầu,,
+Sprint 1,1,Database Schema Design,cms/directus,Thịnh,Cao,Chưa bắt đầu,Setup PostgreSQL Database,Thiết kế bảng users experts bookings
+Sprint 1,1,Write Migration Scripts,shared/database,Quy,Trung bình,Chưa bắt đầu,,
+Sprint 1,1,Project Documentation,docs,Quy,Thấp,Chưa bắt đầu,,
+Sprint 1,2,Shared Packages Development,shared,Huy,Cao,Chưa bắt đầu,,Config logger middleware utils
+Sprint 1,2,API Gateway Routing,api-gateway,Linh,Cao,Chưa bắt đầu,API Gateway Skeleton,
+Sprint 1,2,Database Migrations,shared/database,Thịnh,Cao,Chưa bắt đầu,Database Schema Design,
+Sprint 1,2,Seed Data Creation,shared/database,Thịnh,Trung bình,Chưa bắt đầu,Database Migrations,
+Sprint 1,2,Email Templates,notification-service,Quy,Trung bình,Chưa bắt đầu,,HTML templates cho email
+Sprint 1,2,Notification Structure,notification-service,Quy,Trung bình,Chưa bắt đầu,Email Templates,
+Sprint 2,3,User Service - Auth APIs,user-service,Huy,Cao,Chưa bắt đầu,,Login Register endpoints
+Sprint 2,3,API Gateway Auth Middleware,api-gateway,Linh,Cao,Chưa bắt đầu,User Service - Auth APIs,
+Sprint 2,3,User Tables và Indexes,user-service,Thịnh,Cao,Chưa bắt đầu,,Optimize database performance
+Sprint 2,3,Email Service - Welcome,notification-service,Quy,Trung bình,Chưa bắt đầu,,SMTP integration
+Sprint 2,4,JWT Service Implementation,user-service,Huy,Cao,Chưa bắt đầu,User Service - Auth APIs,Access và refresh token
+Sprint 2,4,Rate Limiting Setup,api-gateway,Linh,Trung bình,Chưa bắt đầu,API Gateway Auth Middleware,
+Sprint 2,4,CORS Configuration,api-gateway,Linh,Thấp,Chưa bắt đầu,Rate Limiting Setup,
+Sprint 2,4,User Profile APIs,user-service,Thịnh,Cao,Chưa bắt đầu,User Tables và Indexes,CRUD operations
+Sprint 2,4,Input Validation,user-service,Thịnh,Trung bình,Chưa bắt đầu,User Profile APIs,
+Sprint 2,4,Basic Notification Structure,notification-service,Quy,Trung bình,Chưa bắt đầu,Email Service - Welcome,
+Sprint 3,5,User Roles Management,user-service,Huy,Cao,Chưa bắt đầu,JWT Service Implementation,Admin Expert User roles
+Sprint 3,5,Expert Schedule Management,expert-service,Linh,Cao,Chưa bắt đầu,,Create weekly schedules
+Sprint 3,5,Booking Service Core,booking-service,Thịnh,Cao,Chưa bắt đầu,,Create validate booking logic
+Sprint 3,5,WebSocket Setup,notification-service,Quy,Cao,Chưa bắt đầu,,Real-time communication
+Sprint 3,6,User Profile Enhancement,user-service,Huy,Trung bình,Chưa bắt đầu,User Roles Management,
+Sprint 3,6,Expert Availability APIs,expert-service,Linh,Cao,Chưa bắt đầu,Expert Schedule Management,
+Sprint 3,6,Redis Caching Implementation,expert-service,Linh,Cao,Chưa bắt đầu,Expert Availability APIs,Cache available slots
+Sprint 3,6,Booking Conflict Checking,booking-service,Thịnh,Cao,Chưa bắt đầu,Booking Service Core,Prevent double booking
+Sprint 3,6,Booking Status Updates,booking-service,Thịnh,Cao,Chưa bắt đầu,Booking Conflict Checking,Pending confirmed rejected
+Sprint 3,6,Real-time Booking Alerts,notification-service,Quy,Cao,Chưa bắt đầu,WebSocket Setup,Notify experts of new bookings
+Sprint 4,7,Worker Service - Cron Jobs,worker-service,Huy,Cao,Chưa bắt đầu,,Automated reminders cleanup
+Sprint 4,7,Review Service,review-service,Linh,Trung bình,Chưa bắt đầu,Redis Caching Implementation,Rating system
+Sprint 4,7,Advanced Booking Features,booking-service,Thịnh,Trung bình,Chưa bắt đầu,Booking Status Updates,Reschedule cancel features
+Sprint 4,7,Email Queue Background Jobs,notification-service,Quy,Cao,Chưa bắt đầu,Real-time Booking Alerts,Bulk email processing
+Sprint 4,8,Performance Optimization,shared/database,Huy,Trung bình,Chưa bắt đầu,Worker Service - Cron Jobs,Database queries optimization
+Sprint 4,8,Integration Testing,tests,Huy,Cao,Chưa bắt đầu,Performance Optimization,End-to-end testing
+Sprint 4,8,API Documentation,docs/api,Linh,Cao,Chưa bắt đầu,Review Service,Swagger OpenAPI docs
+Sprint 4,8,Monitoring Setup,infrastructure/monitoring,Linh,Trung bình,Chưa bắt đầu,API Documentation,Prometheus Grafana
+Sprint 4,8,Final Booking Reports,booking-service,Thịnh,Thấp,Chưa bắt đầu,Advanced Booking Features,Analytics và reports
+Sprint 4,8,Auto Cleanup Jobs,worker-service,Quy,Cao,Chưa bắt đầu,Email Queue Background Jobs,Clean old data
+Sprint 4,8,Final Status Updates,worker-service,Quy,Trung bình,Chưa bắt đầu,Auto Cleanup Jobs,Missed appointments handling
