@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: consultation_booking
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password123
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d
+    networks:
+      - consultation_network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - consultation_network
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./infrastructure/nginx/sites-available:/etc/nginx/sites-available
+    networks:
+      - consultation_network
+
+  user-service:
+    build:
+      context: ./services/user-service
+    container_name: user-service
+    environment:
+      - USER_SERVICE_DSN=host=postgres user=postgres password=password123 dbname=user_service_db port=5432 sslmode=disable
+      - JWT_SECRET=your-secret
+    depends_on:
+      - postgres
+    ports:
+      - "8080:8080"
+    networks:
+      - consultation_network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  consultation_network:
+    driver: bridge
