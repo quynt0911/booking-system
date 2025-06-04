@@ -5,10 +5,10 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"booking-service/internal/model"
-	"booking-service/internal/service"
-	"shared/pkg/logger"
-	"shared/pkg/utils"
+	"booking-system/services/booking-service/internal/model"
+	"booking-system/services/booking-service/internal/service"
+	"booking-system/shared/pkg/logger"
+	"booking-system/shared/pkg/utils"
 )
 
 type StatusHandler struct {
