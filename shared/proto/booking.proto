@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package booking;
+
+option go_package = "github.com/teknix/consultation-booking/shared/proto/booking";
+
+import "google/protobuf/timestamp.proto";
+
+// Booking Service
+service BookingService {
+  rpc CreateBooking(CreateBookingRequest) returns (BookingResponse);
+  rpc GetBooking(GetBookingRequest) returns (BookingResponse);
+  rpc UpdateBookingStatus(UpdateBookingStatusRequest) returns (BookingResponse);
+  rpc CancelBooking(CancelBookingRequest) returns (BookingResponse);
+  rpc ListBookings(ListBookingsRequest) returns (ListBookingsResponse);
+  rpc GetUserBookings(GetUserBookingsRequest) returns (ListBookingsResponse);
+  rpc GetExpertBookings(GetExpertBookingsRequest) returns (ListBookingsResponse);
+  rpc CheckAvailability(CheckAvailabilityRequest) returns (CheckAvailabilityResponse);
+}
+
+// Messages
+message Booking {
+  string id = 1;
+  string user_id = 2;
+  string expert_id = 3;
+  google.protobuf.Timestamp booking_date = 4;
+  string start_time = 5;
+  string end_time = 6;
+  string consultation_type = 7; // online, offline
+  string notes = 8;
+  BookingStatus status = 9;
+  double total_amount = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+  
+  // Related data
+  User user = 13;
+  Expert expert = 14;
+}
+
+message User {
+  string id = 1;
+  string email = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string phone = 5;
+}
+
+message Expert {
+  string id = 1;
+  string user_id = 2;
+  string specialization = 3;
+  string bio = 4;
+  double hourly_rate = 5;
+  int32 years_experience = 6;
+  double rating = 7;
+  int32 total_reviews = 8;
+}
+
+enum BookingStatus {
+  PENDING = 0;
+  CONFIRMED = 1;
+  REJECTED = 2;
+  CANCELLED = 3;
+  COMPLETED = 4;
+  MISSED = 5;
+}
+
+// Request messages
+message CreateBookingRequest {
+  string user_id = 1;
+  string expert_id = 2;
+  string booking_date = 3; // YYYY-MM-DD format
+  string start_time = 4;   // HH:MM:SS format
+  string end_time = 5;     // HH:MM:SS format
+  string consultation_type = 6;
+  string notes = 7;
+}
+
+message GetBookingRequest {
+  string booking_id = 1;
+  string user_id = 2; // for authorization
+}
+
+message UpdateBookingStatusRequest {
+  string booking_id = 1;
+  string user_id = 2; // expert or admin
+  BookingStatus status = 3;
+  string notes = 4;
+}
+
+message CancelBookingRequest {
+  string booking_id = 1;
+  string user_id = 2;
+  string reason = 3;
+}
+
+message ListBookingsRequest {
+  int32 page = 1;
+  int32 limit = 2;
+  BookingStatus status = 3;
+  string expert_id = 4;
+  string date_from = 5;
+  string date_to = 6;
+}
+
+message GetUserBookingsRequest {
+  string user_id = 1;
+  int32 page = 2;
+  int32 limit = 3;
+  BookingStatus status = 4;
+}
+
+message GetExpertBookingsRequest {
+  string expert_id = 1;
+  int32 page = 2;
+  int32 limit = 3;
+  BookingStatus status = 4;
+  string date_from = 5;
+  string date_to = 6;
+}
+
+message CheckAvailabilityRequest {
+  string expert_id = 1;
+  string date = 2; // YYYY-MM-DD format
+  string start_time = 3;
+  string end_time = 4;
+}
+
+// Response messages
+message BookingResponse {
+  bool success = 1;
+  string message = 2;
+  Booking booking = 3;
+}
+
+message ListBookingsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated Booking bookings = 3;
+  int32 total = 4;
+  int32 page = 5;
+  int32 limit = 6;
+}
+
+message CheckAvailabilityResponse {
+  bool success = 1;
+  string message = 2;
+  bool available = 3;
+  repeated string conflicting_booking_ids = 4;
+}
+
+// Status History
+message StatusHistory {
+  string id = 1;
+  string booking_id = 2;
+  BookingStatus old_status = 3;
+  BookingStatus new_status = 4;
+  string changed_by = 5; // user_id
+  string notes = 6;
+  google.protobuf.Timestamp created_at = 7;
+}

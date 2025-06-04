@@ -3,10 +3,10 @@ package main
 import (
 	"log"
 	"os"
-	"services/user-service/handler"
-	"services/user-service/model"
-	"services/user-service/repository"
-	"services/user-service/service"
+	"booking-system/services/user-service/handler"
+	"booking-system/services/user-service/model"
+	"booking-system/services/user-service/repository"
+	"booking-system/services/user-service/service"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
