@@ -3,8 +3,9 @@ package main
 import (
 	"log"
 	"net/http"
-	"github.com/yourname/BOOKING-SYSTEM/internal/config"
-	"github.com/yourname/BOOKING-SYSTEM/internal/routes"
+
+	"booking-system/internal/config"
+	"booking-system/internal/routes"
 )
 
 func main() {

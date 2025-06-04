@@ -2,11 +2,14 @@ package routes
 
 import (
 	"net/http"
+
 	"github.com/gorilla/mux"
-	"github.com/yourname/BOOKING-SYSTEM/internal/config"
-	"github.com/yourname/BOOKING-SYSTEM/internal/handler"
-	"github.com/yourname/BOOKING-SYSTEM/internal/middleware"
+
+	"booking-system/internal/config"
+	"booking-system/internal/handler"
+	"booking-system/internal/middleware"
 )
+
 
 func SetupRoutes(cfg *config.Config) http.Handler {
 	r := mux.NewRouter()

@@ -1,1 +1,0 @@
-anh thinh dep trai
