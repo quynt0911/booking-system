@@ -2,7 +2,7 @@ services:
   database:
     image: postgis/postgis:13-3.1
     ports:
-      - "5433:5432"  # External port 5433, internal port 5432
+      - "5433:5432"
     volumes:
       - ./data/database:/var/lib/postgresql/data
     environment:

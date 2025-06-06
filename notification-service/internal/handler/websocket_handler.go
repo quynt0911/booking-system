@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"net/http"
+	// "net/http"
 	"notification-service/internal/websocket"
 	"github.com/gin-gonic/gin"
 )
