@@ -1,8 +1,8 @@
 package handler
 
 import (
-	// "net/http"
 	"notification-service/internal/websocket"
+
 	"github.com/gin-gonic/gin"
 )
 
