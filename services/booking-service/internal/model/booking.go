@@ -3,21 +3,11 @@ package model
 
 import (
 	"time"
+
+	"github.com/google/uuid"
 )
 
-// BookingStatus định nghĩa các trạng thái của booking
-type BookingStatus string
-
-const (
-	StatusPending   BookingStatus = "pending"
-	StatusConfirmed BookingStatus = "confirmed"
-	StatusRejected  BookingStatus = "rejected"
-	StatusCancelled BookingStatus = "cancelled"
-	StatusCompleted BookingStatus = "completed"
-	StatusMissed    BookingStatus = "missed"
-)
-
-// BookingType định nghĩa loại hình tư vấn
+// BookingType represents the type of booking
 type BookingType string
 
 const (
@@ -25,64 +15,90 @@ const (
 	TypeOffline BookingType = "offline"
 )
 
-// Booking struct định nghĩa cấu trúc của một booking
+// BookingStatus represents the status of a booking
+type BookingStatus string
+
+const (
+	BookingStatusPending   BookingStatus = "pending"
+	BookingStatusConfirmed BookingStatus = "confirmed"
+	BookingStatusRejected  BookingStatus = "rejected"
+	BookingStatusCancelled BookingStatus = "cancelled"
+	BookingStatusCompleted BookingStatus = "completed"
+	BookingStatusMissed    BookingStatus = "missed"
+)
+
+// Booking represents a booking record
 type Booking struct {
-	ID          uint          `json:"id" gorm:"primaryKey;autoIncrement"`
-	UserID      uint          `json:"user_id" gorm:"not null;index"`
-	ExpertID    uint          `json:"expert_id" gorm:"not null;index"`
-	StartTime   time.Time     `json:"start_time" gorm:"not null;index"`
-	EndTime     time.Time     `json:"end_time" gorm:"not null"`
-	Type        BookingType   `json:"type" gorm:"not null;default:'online'"`
-	Status      BookingStatus `json:"status" gorm:"not null;default:'pending';index"`
-	Notes       string        `json:"notes" gorm:"type:text"`
-	Location    string        `json:"location,omitempty"`
-	MeetingLink string        `json:"meeting_link,omitempty"`
-	CreatedAt   time.Time     `json:"created_at" gorm:"autoCreateTime"`
-	UpdatedAt   time.Time     `json:"updated_at" gorm:"autoUpdateTime"`
-	ConfirmedAt *time.Time    `json:"confirmed_at,omitempty"`
-	CancelledAt *time.Time    `json:"cancelled_at,omitempty"`
+	ID              uuid.UUID     `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	UserID          uuid.UUID     `json:"user_id" gorm:"type:uuid"`
+	ExpertID        uuid.UUID     `json:"expert_id" gorm:"type:uuid"`
+	ScheduledTime   time.Time     `json:"scheduled_datetime"`
+	DurationMinutes int           `json:"duration_minutes" gorm:"default:60"`
+	MeetingType     BookingType   `json:"meeting_type" gorm:"default:'online'"`
+	MeetingURL      string        `json:"meeting_url,omitempty"`
+	MeetingAddress  string        `json:"meeting_address,omitempty"`
+	Notes           string        `json:"notes,omitempty"`
+	Status          BookingStatus `json:"status" gorm:"default:'pending'"`
+	Price           float64       `json:"price,omitempty"`
+	CreatedAt       time.Time     `json:"created_at"`
+	UpdatedAt       time.Time     `json:"updated_at"`
+	ConfirmedAt     *time.Time    `json:"confirmed_at,omitempty"`
+	CancelledAt     *time.Time    `json:"cancelled_at,omitempty"`
+	CompletedAt     *time.Time    `json:"completed_at,omitempty"`
 }
 
-// TableName trả về tên bảng trong database
+// IsValidBookingStatus checks if the given status is valid
+func IsValidBookingStatus(status string) bool {
+	switch BookingStatus(status) {
+	case BookingStatusPending, BookingStatusConfirmed, BookingStatusRejected,
+		BookingStatusCancelled, BookingStatusCompleted, BookingStatusMissed:
+		return true
+	default:
+		return false
+	}
+}
+
+// TableName returns the table name in the database
 func (Booking) TableName() string {
 	return "bookings"
 }
 
-// IsActive kiểm tra booking có đang active không
+// IsActive checks if the booking is currently active
 func (b *Booking) IsActive() bool {
-	return b.Status == StatusPending || b.Status == StatusConfirmed
+	return b.Status == BookingStatusPending || b.Status == BookingStatusConfirmed
 }
 
-// CanBeCancelled kiểm tra booking có thể bị hủy không
+// CanBeCancelled checks if the booking can be cancelled
 func (b *Booking) CanBeCancelled() bool {
-	if b.Status != StatusPending && b.Status != StatusConfirmed {
+	if b.Status != BookingStatusPending && b.Status != BookingStatusConfirmed {
 		return false
 	}
-	
-	// Chỉ có thể hủy trước 1 tiếng
-	oneHourBefore := b.StartTime.Add(-1 * time.Hour)
+
+	// Can only cancel 1 hour before the scheduled time
+	oneHourBefore := b.ScheduledTime.Add(-1 * time.Hour)
 	return time.Now().Before(oneHourBefore)
 }
 
-// CanBeConfirmed kiểm tra booking có thể được xác nhận không
+// CanBeConfirmed checks if the booking can be confirmed
 func (b *Booking) CanBeConfirmed() bool {
-	return b.Status == StatusPending
+	return b.Status == BookingStatusPending
 }
 
-// IsExpired kiểm tra booking đã hết hạn chưa
+// IsExpired checks if the booking has expired
 func (b *Booking) IsExpired() bool {
-	return time.Now().After(b.EndTime) && b.Status == StatusPending
+	endTime := b.ScheduledTime.Add(time.Duration(b.DurationMinutes) * time.Minute)
+	return time.Now().After(endTime) && b.Status == BookingStatusPending
 }
 
-// GetDuration trả về thời gian tư vấn (phút)
-func (b *Booking) GetDuration() int {
-	return int(b.EndTime.Sub(b.StartTime).Minutes())
+// GetEndTime returns the end time of the booking
+func (b *Booking) GetEndTime() time.Time {
+	return b.ScheduledTime.Add(time.Duration(b.DurationMinutes) * time.Minute)
 }
 
-// BookingFilter struct để filter booking
+// BookingFilter struct for filtering bookings
 type BookingFilter struct {
-	UserID    *uint          `json:"user_id,omitempty"`
-	ExpertID  *uint          `json:"expert_id,omitempty"`
+	UserID    *uuid.UUID     `json:"user_id,omitempty"`
+	ExpertID  *uuid.UUID     `json:"expert_id,omitempty"`
 	Status    *BookingStatus `json:"status,omitempty"`
 	Type      *BookingType   `json:"type,omitempty"`
 	StartDate *time.Time     `json:"start_date,omitempty"`

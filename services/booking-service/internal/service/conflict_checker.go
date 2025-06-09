@@ -6,16 +6,32 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-redis/redis/v8"
-	"booking-service/internal/repository"
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+
+	"booking-system/services/booking-service/internal/model"
+	"booking-system/services/booking-service/internal/repository"
 )
 
 type ConflictCheckerInterface interface {
-	CheckBookingConflict(expertID, userID uint, startTime, endTime time.Time) (bool, error)
-	CheckExpertAvailability(expertID uint, startTime, endTime time.Time) (bool, error)
-	CheckUserConflict(userID uint, startTime, endTime time.Time) (bool, error)
-	LockTimeSlot(expertID uint, startTime, endTime time.Time) (string, error)
+	CheckBookingConflict(expertID, userID uuid.UUID, startTime, endTime time.Time) (bool, error)
+	CheckExpertAvailability(expertID uuid.UUID, startTime, endTime time.Time) (bool, error)
+	CheckUserConflict(userID uuid.UUID, startTime, endTime time.Time) (bool, error)
+	LockTimeSlot(expertID uuid.UUID, startTime, endTime time.Time) (string, error)
 	ReleaseLock(lockKey string) error
+	CheckMultipleTimeSlots(expertID uuid.UUID, timeSlots []TimeSlot) (map[int]bool, error)
+	GetExpertBusySlots(expertID uuid.UUID, date time.Time) ([]TimeSlot, error)
+	IsTimeSlotOverlapping(start1, end1, start2, end2 time.Time) bool
+	ValidateTimeSlot(startTime, endTime time.Time) error
+	ClearExpertCache(expertID uuid.UUID) error
+	CheckConflict(req *model.CheckConflictRequest) (bool, error)
+	CheckConflictWithExclusion(req *model.CheckConflictRequest, excludeID uuid.UUID) (bool, error)
+	GetExpertBookingsByDate(expertID uuid.UUID, date time.Time) ([]*model.Booking, error)
+}
+
+type TimeSlot struct {
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
 }
 
 type ConflictChecker struct {
@@ -33,13 +49,18 @@ func NewConflictChecker(
 	}
 }
 
-func (c *ConflictChecker) CheckBookingConflict(expertID, userID uint, startTime, endTime time.Time) (bool, error) {
+func (c *ConflictChecker) CheckBookingConflict(expertID, userID uuid.UUID, startTime, endTime time.Time) (bool, error) {
+	// Validate time slot first
+	if err := c.ValidateTimeSlot(startTime, endTime); err != nil {
+		return false, err
+	}
+
 	// Check expert availability
-	expertHasConflict, err := c.CheckExpertAvailability(expertID, startTime, endTime)
+	expertAvailable, err := c.CheckExpertAvailability(expertID, startTime, endTime)
 	if err != nil {
 		return false, fmt.Errorf("failed to check expert availability: %v", err)
 	}
-	if !expertHasConflict {
+	if !expertAvailable {
 		return true, nil // Expert is not available
 	}
 
@@ -55,13 +76,13 @@ func (c *ConflictChecker) CheckBookingConflict(expertID, userID uint, startTime,
 	return false, nil // No conflicts
 }
 
-func (c *ConflictChecker) CheckExpertAvailability(expertID uint, startTime, endTime time.Time) (bool, error) {
+func (c *ConflictChecker) CheckExpertAvailability(expertID uuid.UUID, startTime, endTime time.Time) (bool, error) {
 	// First check Redis cache for quick lookup
-	cacheKey := fmt.Sprintf("expert_busy:%d:%s:%s", 
-		expertID, 
-		startTime.Format("2006-01-02T15:04:05"), 
+	cacheKey := fmt.Sprintf("expert_busy:%s:%s:%s",
+		expertID.String(),
+		startTime.Format("2006-01-02T15:04:05"),
 		endTime.Format("2006-01-02T15:04:05"))
-	
+
 	ctx := context.Background()
 	cached, err := c.redisClient.Get(ctx, cacheKey).Result()
 	if err == nil {
@@ -85,13 +106,13 @@ func (c *ConflictChecker) CheckExpertAvailability(expertID uint, startTime, endT
 	return !hasConflict, nil // Return availability
 }
 
-func (c *ConflictChecker) CheckUserConflict(userID uint, startTime, endTime time.Time) (bool, error) {
+func (c *ConflictChecker) CheckUserConflict(userID uuid.UUID, startTime, endTime time.Time) (bool, error) {
 	// Check Redis cache first
-	cacheKey := fmt.Sprintf("user_busy:%d:%s:%s", 
-		userID, 
-		startTime.Format("2006-01-02T15:04:05"), 
+	cacheKey := fmt.Sprintf("user_busy:%s:%s:%s",
+		userID.String(),
+		startTime.Format("2006-01-02T15:04:05"),
 		endTime.Format("2006-01-02T15:04:05"))
-	
+
 	ctx := context.Background()
 	cached, err := c.redisClient.Get(ctx, cacheKey).Result()
 	if err == nil {
@@ -114,24 +135,24 @@ func (c *ConflictChecker) CheckUserConflict(userID uint, startTime, endTime time
 	return hasConflict, nil
 }
 
-func (c *ConflictChecker) LockTimeSlot(expertID uint, startTime, endTime time.Time) (string, error) {
-	lockKey := fmt.Sprintf("booking_lock:%d:%s:%s", 
-		expertID, 
-		startTime.Format("2006-01-02T15:04:05"), 
+func (c *ConflictChecker) LockTimeSlot(expertID uuid.UUID, startTime, endTime time.Time) (string, error) {
+	lockKey := fmt.Sprintf("booking_lock:%s:%s:%s",
+		expertID.String(),
+		startTime.Format("2006-01-02T15:04:05"),
 		endTime.Format("2006-01-02T15:04:05"))
-	
+
 	ctx := context.Background()
-	
+
 	// Try to acquire lock with expiration (5 minutes)
 	success, err := c.redisClient.SetNX(ctx, lockKey, "locked", 5*time.Minute).Result()
 	if err != nil {
 		return "", fmt.Errorf("failed to acquire lock: %v", err)
 	}
-	
+
 	if !success {
 		return "", fmt.Errorf("time slot is currently being booked by another user")
 	}
-	
+
 	return lockKey, nil
 }
 
@@ -140,35 +161,30 @@ func (c *ConflictChecker) ReleaseLock(lockKey string) error {
 	return c.redisClient.Del(ctx, lockKey).Err()
 }
 
-// Additional helper methods
-
-// CheckMultipleTimeSlots checks availability for multiple time slots at once
-func (c *ConflictChecker) CheckMultipleTimeSlots(expertID uint, timeSlots []TimeSlot) (map[int]bool, error) {
+func (c *ConflictChecker) CheckMultipleTimeSlots(expertID uuid.UUID, timeSlots []TimeSlot) (map[int]bool, error) {
 	availability := make(map[int]bool)
-	
+
 	for i, slot := range timeSlots {
+		// Validate time slot
+		if err := c.ValidateTimeSlot(slot.StartTime, slot.EndTime); err != nil {
+			return nil, fmt.Errorf("invalid time slot %d: %v", i, err)
+		}
+
 		available, err := c.CheckExpertAvailability(expertID, slot.StartTime, slot.EndTime)
 		if err != nil {
 			return nil, fmt.Errorf("failed to check slot %d: %v", i, err)
 		}
 		availability[i] = available
 	}
-	
+
 	return availability, nil
 }
 
-// TimeSlot represents a time period
-type TimeSlot struct {
-	StartTime time.Time `json:"start_time"`
-	EndTime   time.Time `json:"end_time"`
-}
-
-// GetExpertBusySlots returns all busy time slots for an expert on a given date
-func (c *ConflictChecker) GetExpertBusySlots(expertID uint, date time.Time) ([]TimeSlot, error) {
+func (c *ConflictChecker) GetExpertBusySlots(expertID uuid.UUID, date time.Time) ([]TimeSlot, error) {
 	// Check cache first
-	cacheKey := fmt.Sprintf("expert_busy_slots:%d:%s", expertID, date.Format("2006-01-02"))
+	cacheKey := fmt.Sprintf("expert_busy_slots:%s:%s", expertID.String(), date.Format("2006-01-02"))
 	ctx := context.Background()
-	
+
 	cached, err := c.redisClient.Get(ctx, cacheKey).Result()
 	if err == nil {
 		var slots []TimeSlot
@@ -186,8 +202,8 @@ func (c *ConflictChecker) GetExpertBusySlots(expertID uint, date time.Time) ([]T
 	var busySlots []TimeSlot
 	for _, booking := range bookings {
 		busySlots = append(busySlots, TimeSlot{
-			StartTime: booking.StartTime,
-			EndTime:   booking.EndTime,
+			StartTime: booking.ScheduledTime,
+			EndTime:   booking.GetEndTime(),
 		})
 	}
 
@@ -198,12 +214,10 @@ func (c *ConflictChecker) GetExpertBusySlots(expertID uint, date time.Time) ([]T
 	return busySlots, nil
 }
 
-// IsTimeSlotOverlapping checks if two time slots overlap
 func (c *ConflictChecker) IsTimeSlotOverlapping(start1, end1, start2, end2 time.Time) bool {
 	return start1.Before(end2) && start2.Before(end1)
 }
 
-// ValidateTimeSlot validates if a time slot is valid (end time after start time, minimum duration, etc.)
 func (c *ConflictChecker) ValidateTimeSlot(startTime, endTime time.Time) error {
 	if endTime.Before(startTime) || endTime.Equal(startTime) {
 		return fmt.Errorf("end time must be after start time")
@@ -231,11 +245,10 @@ func (c *ConflictChecker) ValidateTimeSlot(startTime, endTime time.Time) error {
 	return nil
 }
 
-// ClearExpertCache clears all cached data for an expert
-func (c *ConflictChecker) ClearExpertCache(expertID uint) error {
+func (c *ConflictChecker) ClearExpertCache(expertID uuid.UUID) error {
 	ctx := context.Background()
-	pattern := fmt.Sprintf("expert_*:%d:*", expertID)
-	
+	pattern := fmt.Sprintf("expert_*:%s:*", expertID.String())
+
 	keys, err := c.redisClient.Keys(ctx, pattern).Result()
 	if err != nil {
 		return err
@@ -246,4 +259,66 @@ func (c *ConflictChecker) ClearExpertCache(expertID uint) error {
 	}
 
 	return nil
+}
+
+func (c *ConflictChecker) CheckConflict(req *model.CheckConflictRequest) (bool, error) {
+	// Check expert conflicts
+	hasExpertConflict, err := c.bookingRepo.HasExpertConflict(req.ExpertID, req.StartTime, req.EndTime)
+	if err != nil {
+		return false, err
+	}
+	if hasExpertConflict {
+		return true, nil
+	}
+
+	// Check user conflicts if UserID is provided
+	if req.UserID != nil {
+		hasUserConflict, err := c.bookingRepo.HasUserConflict(*req.UserID, req.StartTime, req.EndTime)
+		if err != nil {
+			return false, err
+		}
+		if hasUserConflict {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (c *ConflictChecker) CheckConflictWithExclusion(req *model.CheckConflictRequest, excludeID uuid.UUID) (bool, error) {
+	// Check expert conflicts
+	hasExpertConflict, err := c.bookingRepo.HasExpertConflict(req.ExpertID, req.StartTime, req.EndTime)
+	if err != nil {
+		return false, err
+	}
+	if hasExpertConflict {
+		return true, nil
+	}
+
+	// Check user conflicts if UserID is provided
+	if req.UserID != nil {
+		hasUserConflict, err := c.bookingRepo.HasUserConflict(*req.UserID, req.StartTime, req.EndTime)
+		if err != nil {
+			return false, err
+		}
+		if hasUserConflict {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (c *ConflictChecker) GetExpertBookingsByDate(expertID uuid.UUID, date time.Time) ([]*model.Booking, error) {
+	bookings, err := c.bookingRepo.GetExpertBookingsByDate(expertID, date)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert []model.Booking to []*model.Booking
+	bookingPtrs := make([]*model.Booking, len(bookings))
+	for i := range bookings {
+		bookingPtrs[i] = &bookings[i]
+	}
+	return bookingPtrs, nil
 }

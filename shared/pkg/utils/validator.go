@@ -32,7 +32,7 @@ func validatePhone(fl validator.FieldLevel) bool {
 		`^(\+84|0)(3[2-9]|5[6|8|9]|7[0|6-9]|8[1-6|8|9]|9[0-4|6-9])[0-9]{7}$`,
 		`^(\+84|0)(1[2689]|9[0-9])[0-9]{8}$`,
 	}
-	
+
 	for _, pattern := range patterns {
 		if matched, _ := regexp.MatchString(pattern, phone); matched {
 			return true
@@ -44,18 +44,18 @@ func validatePhone(fl validator.FieldLevel) bool {
 // validatePassword validates password strength
 func validatePassword(fl validator.FieldLevel) bool {
 	password := fl.Field().String()
-	
+
 	if len(password) < 8 {
 		return false
 	}
-	
+
 	var (
 		hasUpper   = false
 		hasLower   = false
 		hasNumber  = false
 		hasSpecial = false
 	)
-	
+
 	for _, char := range password {
 		switch {
 		case unicode.IsUpper(char):
@@ -68,7 +68,7 @@ func validatePassword(fl validator.FieldLevel) bool {
 			hasSpecial = true
 		}
 	}
-	
+
 	return hasUpper && hasLower && hasNumber && hasSpecial
 }
 
@@ -82,7 +82,7 @@ func validateBookingTime(fl validator.FieldLevel) bool {
 func validateConsultationType(fl validator.FieldLevel) bool {
 	consultationType := strings.ToLower(fl.Field().String())
 	validTypes := []string{"online", "offline"}
-	
+
 	for _, validType := range validTypes {
 		if consultationType == validType {
 			return true
@@ -101,7 +101,7 @@ type ValidationError struct {
 // GetValidationErrors extracts validation errors
 func GetValidationErrors(err error) []ValidationError {
 	var errors []ValidationError
-	
+
 	if validationErrors, ok := err.(validator.ValidationErrors); ok {
 		for _, ve := range validationErrors {
 			errors = append(errors, ValidationError{
@@ -111,7 +111,7 @@ func GetValidationErrors(err error) []ValidationError {
 			})
 		}
 	}
-	
+
 	return errors
 }
 

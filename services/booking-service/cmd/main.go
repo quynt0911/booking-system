@@ -10,20 +10,21 @@ import (
 	"syscall"
 	"time"
 
+	"booking-system/services/booking-service/internal/config"
+	"booking-system/services/booking-service/internal/handler"
+	"booking-system/services/booking-service/internal/repository"
+	"booking-system/services/booking-service/internal/routes"
+	"booking-system/services/booking-service/internal/service"
+	"booking-system/services/booking-service/pkg/database"
+	"booking-system/services/booking-service/pkg/logger"
+
 	"github.com/gin-gonic/gin"
-	"booking-service/internal/config"
-	"booking-service/internal/handler"
-	"booking-service/internal/repository"
-	"booking-service/internal/routes"
-	"booking-service/internal/service"
-	"shared/pkg/database"
-	"shared/pkg/logger"
 )
 
 func main() {
 	// Initialize logger
-	logger := logger.NewLogger()
-	
+	appLogger := logger.NewLogger()
+
 	// Load configuration
 	cfg, err := config.Load()
 	if err != nil {
@@ -37,6 +38,12 @@ func main() {
 	}
 	defer db.Close()
 
+	// Convert *sql.DB to *gorm.DB
+	gormDB, err := database.GetGormDB(db)
+	if err != nil {
+		log.Fatal("Failed to get GORM DB:", err)
+	}
+
 	// Initialize Redis
 	redisClient, err := database.NewRedisConnection(cfg.Redis.URL)
 	if err != nil {
@@ -45,26 +52,26 @@ func main() {
 	defer redisClient.Close()
 
 	// Initialize repositories
-	bookingRepo := repository.NewBookingRepository(db)
-	statusHistoryRepo := repository.NewStatusHistoryRepository(db)
+	bookingRepo := repository.NewBookingRepository(gormDB)
+	statusHistoryRepo := repository.NewStatusHistoryRepository(gormDB)
 
 	// Initialize services
-	bookingService := service.NewBookingService(bookingRepo, statusHistoryRepo, redisClient, logger)
+	bookingService := service.NewBookingService(bookingRepo, statusHistoryRepo, redisClient, appLogger)
 	conflictChecker := service.NewConflictChecker(bookingRepo, redisClient)
-	statusService := service.NewStatusService(statusHistoryRepo, logger)
+	statusService := service.NewStatusService(statusHistoryRepo, bookingRepo, appLogger)
 
 	// Initialize handlers
-	bookingHandler := handler.NewBookingHandler(bookingService, conflictChecker, logger)
-	statusHandler := handler.NewStatusHandler(statusService, logger)
-	historyHandler := handler.NewHistoryHandler(bookingService, logger)
+	bookingHandler := handler.NewBookingHandler(bookingService, conflictChecker, appLogger)
+	statusHandler := handler.NewStatusHandler(statusService, appLogger)
+	historyHandler := handler.NewHistoryHandler(bookingService, appLogger)
 
 	// Initialize Gin router
 	if cfg.App.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
-	
+
 	router := gin.Default()
-	
+
 	// Setup routes
 	routes.SetupRoutes(router, bookingHandler, statusHandler, historyHandler)
 
@@ -79,7 +86,7 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		logger.Info(fmt.Sprintf("Booking service starting on port %s", cfg.App.Port))
+		appLogger.Info(fmt.Sprintf("Booking service starting on port %s", cfg.App.Port))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal("Failed to start server:", err)
 		}
@@ -90,7 +97,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logger.Info("Shutting down booking service...")
+	appLogger.Info("Shutting down booking service...")
 
 	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -100,5 +107,5 @@ func main() {
 		log.Fatal("Server forced to shutdown:", err)
 	}
 
-	logger.Info("Booking service stopped")
+	appLogger.Info("Booking service stopped")
 }

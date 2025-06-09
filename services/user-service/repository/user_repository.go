@@ -23,7 +23,9 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 }
 
 func (r *userRepository) Create(user *model.User) error {
-	return r.db.Create(user).Error
+	sql := `INSERT INTO users (id, email, password_hash, fullname, role) VALUES (?, ?, ?, ?, ?)`
+	result := r.db.Exec(sql, user.ID, user.Email, user.PasswordHash, user.FullName, user.Role)
+	return result.Error
 }
 
 func (r *userRepository) FindByEmail(email string) (*model.User, error) {

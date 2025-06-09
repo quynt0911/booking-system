@@ -2,9 +2,9 @@ set -e
 
 DB_HOST=${DB_HOST:-localhost}
 DB_PORT=${DB_PORT:-5432}
-DB_NAME=${DB_NAME:-consultation_db}
-DB_USER=${DB_USER:-postgres}
-DB_PASSWORD=${DB_PASSWORD:-password}
+DB_NAME=${DB_NAME:-booking_system}
+DB_USER=${DB_USER:-directus}
+DB_PASSWORD=${DB_PASSWORD:-directus}
 
 # Colors
 GREEN='\033[0;32m'
@@ -17,12 +17,12 @@ echo -e "${YELLOW}Starting database seeding...${NC}"
 PGPASSWORD=$DB_PASSWORD psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" << 'EOF'
 
 -- Seed Users
-INSERT INTO users (id, email, password, first_name, last_name, role, phone, is_verified, created_at, updated_at) VALUES
-('550e8400-e29b-41d4-a716-446655440001', 'admin@teknix.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Admin', 'System', 'admin', '+84901234567', true, NOW(), NOW()),
-('550e8400-e29b-41d4-a716-446655440002', 'expert1@teknix.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Nguyễn', 'Văn A', 'expert', '+84901234568', true, NOW(), NOW()),
-('550e8400-e29b-41d4-a716-446655440003', 'expert2@teknix.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Trần', 'Thị B', 'expert', '+84901234569', true, NOW(), NOW()),
-('550e8400-e29b-41d4-a716-446655440004', 'user1@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Lê', 'Văn C', 'user', '+84901234570', true, NOW(), NOW()),
-('550e8400-e29b-41d4-a716-446655440005', 'user2@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Phạm', 'Thị D', 'user', '+84901234571', true, NOW(), NOW());
+INSERT INTO users (id, email, password_hash, fullname, role, phone, email_verified, created_at, updated_at) VALUES
+('550e8400-e29b-41d4-a716-446655440001', 'admin@teknix.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Admin System', 'admin', '+84901234567', true, NOW(), NOW()),
+('550e8400-e29b-41d4-a716-446655440002', 'expert1@teknix.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Nguyễn Văn A', 'expert', '+84901234568', true, NOW(), NOW()),
+('550e8400-e29b-41d4-a716-446655440003', 'expert2@teknix.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Trần Thị B', 'expert', '+84901234569', true, NOW(), NOW()),
+('550e8400-e29b-41d4-a716-446655440004', 'user1@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Lê Văn C', 'user', '+84901234570', true, NOW(), NOW()),
+('550e8400-e29b-41d4-a716-446655440005', 'user2@example.com', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'Phạm Thị D', 'user', '+84901234571', true, NOW(), NOW());
 
 -- Seed Experts
 INSERT INTO experts (id, user_id, specialization, bio, hourly_rate, years_experience, rating, total_reviews, is_available, created_at, updated_at) VALUES

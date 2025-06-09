@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/go-playground/validator/v10"
-	
+
 	"booking-system/services/booking-service/internal/model"
 )
 
@@ -19,7 +19,7 @@ type BookingValidator struct {
 // NewBookingValidator tạo instance mới của BookingValidator
 func NewBookingValidator() *BookingValidator {
 	v := validator.New()
-	
+
 	// Đăng ký custom validation functions
 	v.RegisterValidation("future_time", validateFutureTime)
 	v.RegisterValidation("valid_time_range", validateTimeRange)
@@ -29,7 +29,7 @@ func NewBookingValidator() *BookingValidator {
 	v.RegisterValidation("max_duration", validateMaxDuration)
 	v.RegisterValidation("business_hours", validateBusinessHours)
 	v.RegisterValidation("not_weekend", validateNotWeekend)
-	
+
 	return &BookingValidator{
 		validator: v,
 	}
@@ -40,16 +40,19 @@ func (bv *BookingValidator) ValidateCreateBooking(req *model.CreateBookingReques
 	if err := bv.validator.Struct(req); err != nil {
 		return bv.formatValidationError(err)
 	}
-	
+
+	// Calculate end time from scheduled time and duration
+	endTime := req.ScheduledTime.Add(time.Duration(req.DurationMinutes) * time.Minute)
+
 	// Custom validations
-	if err := bv.validateBookingTimeRange(req.StartTime, req.EndTime); err != nil {
+	if err := bv.validateBookingTimeRange(req.ScheduledTime, endTime); err != nil {
 		return err
 	}
-	
-	if err := bv.validateBookingType(req.Type, req.Location, req.MeetingLink); err != nil {
+
+	if err := bv.validateBookingType(req.MeetingType, req.MeetingAddress, req.MeetingURL); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -58,7 +61,7 @@ func (bv *BookingValidator) ValidateUpdateBooking(req *model.UpdateBookingReques
 	if err := bv.validator.Struct(req); err != nil {
 		return bv.formatValidationError(err)
 	}
-	
+
 	return nil
 }
 
@@ -67,7 +70,7 @@ func (bv *BookingValidator) ValidateStatusUpdate(req *model.UpdateBookingStatusR
 	if err := bv.validator.Struct(req); err != nil {
 		return bv.formatValidationError(err)
 	}
-	
+
 	return nil
 }
 
@@ -76,11 +79,11 @@ func (bv *BookingValidator) ValidateConflictCheck(req *model.CheckConflictReques
 	if err := bv.validator.Struct(req); err != nil {
 		return bv.formatValidationError(err)
 	}
-	
+
 	if err := bv.validateBookingTimeRange(req.StartTime, req.EndTime); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -89,14 +92,14 @@ func (bv *BookingValidator) ValidateGetBookings(req *model.GetBookingsRequest) e
 	if err := bv.validator.Struct(req); err != nil {
 		return bv.formatValidationError(err)
 	}
-	
+
 	// Validate date range
 	if req.StartDate != nil && req.EndDate != nil {
 		if req.StartDate.After(*req.EndDate) {
 			return fmt.Errorf("start_date cannot be after end_date")
 		}
 	}
-	
+
 	// Set default pagination values
 	if req.Page == 0 {
 		req.Page = 1
@@ -104,41 +107,41 @@ func (bv *BookingValidator) ValidateGetBookings(req *model.GetBookingsRequest) e
 	if req.Limit == 0 {
 		req.Limit = 20
 	}
-	
+
 	return nil
 }
 
 // validateBookingTimeRange validate thời gian booking
 func (bv *BookingValidator) validateBookingTimeRange(startTime, endTime time.Time) error {
 	now := time.Now()
-	
+
 	// Kiểm tra thời gian trong tương lai
 	if startTime.Before(now) {
 		return fmt.Errorf("start_time must be in the future")
 	}
-	
+
 	// Kiểm tra endTime sau startTime
 	if endTime.Before(startTime) || endTime.Equal(startTime) {
 		return fmt.Errorf("end_time must be after start_time")
 	}
-	
+
 	// Kiểm tra thời gian tối thiểu (15 phút)
 	duration := endTime.Sub(startTime)
 	if duration < 15*time.Minute {
 		return fmt.Errorf("booking duration must be at least 15 minutes")
 	}
-	
+
 	// Kiểm tra thời gian tối đa (4 giờ)
 	if duration > 4*time.Hour {
 		return fmt.Errorf("booking duration cannot exceed 4 hours")
 	}
-	
+
 	// Kiểm tra booking không quá xa trong tương lai (90 ngày)
 	maxFutureDate := now.AddDate(0, 0, 90)
 	if startTime.After(maxFutureDate) {
 		return fmt.Errorf("booking cannot be scheduled more than 90 days in advance")
 	}
-	
+
 	return nil
 }
 
@@ -160,27 +163,27 @@ func (bv *BookingValidator) validateBookingType(bookingType model.BookingType, l
 	default:
 		return fmt.Errorf("invalid booking type")
 	}
-	
+
 	return nil
 }
 
 // formatValidationError format lỗi validation thành message dễ đọc
 func (bv *BookingValidator) formatValidationError(err error) error {
 	var errorMessages []string
-	
+
 	if validationErrors, ok := err.(validator.ValidationErrors); ok {
 		for _, fieldError := range validationErrors {
 			errorMessages = append(errorMessages, bv.getFieldErrorMessage(fieldError))
 		}
 	}
-	
+
 	return fmt.Errorf("validation failed: %s", strings.Join(errorMessages, ", "))
 }
 
 // getFieldErrorMessage tạo message lỗi cho từng field
 func (bv *BookingValidator) getFieldErrorMessage(fieldError validator.FieldError) string {
 	field := strings.ToLower(fieldError.Field())
-	
+
 	switch fieldError.Tag() {
 	case "required":
 		return fmt.Sprintf("%s is required", field)
@@ -223,7 +226,7 @@ func validateFutureTime(fl validator.FieldLevel) bool {
 	if !ok {
 		return false
 	}
-	
+
 	return timeValue.After(time.Now())
 }
 
@@ -238,20 +241,19 @@ func validateTimeRange(fl validator.FieldLevel) bool {
 func validateBookingStatus(fl validator.FieldLevel) bool {
 	status := fl.Field().String()
 	validStatuses := []string{
-		string(model.StatusPending),
-		string(model.StatusConfirmed),
-		string(model.StatusRejected),
-		string(model.StatusCancelled),
-		string(model.StatusCompleted),
-		string(model.StatusMissed),
+		string(model.BookingStatusPending),
+		string(model.BookingStatusConfirmed),
+		string(model.BookingStatusRejected),
+		string(model.BookingStatusCancelled),
+		string(model.BookingStatusCompleted),
 	}
-	
+
 	for _, validStatus := range validStatuses {
 		if status == validStatus {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
@@ -281,7 +283,7 @@ func validateBusinessHours(fl validator.FieldLevel) bool {
 	if !ok {
 		return false
 	}
-	
+
 	hour := timeValue.Hour()
 	return hour >= 9 && hour < 18 // 9 AM - 6 PM
 }
@@ -292,18 +294,36 @@ func validateNotWeekend(fl validator.FieldLevel) bool {
 	if !ok {
 		return false
 	}
-	
+
 	weekday := timeValue.Weekday()
 	return weekday != time.Saturday && weekday != time.Sunday
 }
 
 // ValidateStatusTransition kiểm tra chuyển đổi trạng thái hợp lệ
 func (bv *BookingValidator) ValidateStatusTransition(oldStatus, newStatus model.BookingStatus, changeType string) error {
-	if !model.IsValidTransition(oldStatus, newStatus, changeType) {
-		return fmt.Errorf("invalid status transition from %s to %s by %s", oldStatus, newStatus, changeType)
+	// Define valid transitions
+	validTransitions := map[model.BookingStatus][]model.BookingStatus{
+		model.BookingStatusPending:   {model.BookingStatusConfirmed, model.BookingStatusCancelled},
+		model.BookingStatusConfirmed: {model.BookingStatusCompleted, model.BookingStatusCancelled},
+		model.BookingStatusCompleted: {},
+		model.BookingStatusCancelled: {},
 	}
-	
-	return nil
+
+	// Admin can change to any status
+	if changeType == "admin" {
+		return nil
+	}
+
+	// Check if the transition is valid
+	if allowedStatuses, exists := validTransitions[oldStatus]; exists {
+		for _, status := range allowedStatuses {
+			if status == newStatus {
+				return nil
+			}
+		}
+	}
+
+	return fmt.Errorf("invalid status transition from %s to %s", oldStatus, newStatus)
 }
 
 // ValidateBookingTime kiểm tra thời gian booking với các rule phức tạp
@@ -312,24 +332,24 @@ func (bv *BookingValidator) ValidateBookingTime(startTime, endTime time.Time, ex
 	if err := bv.validateBookingTimeRange(startTime, endTime); err != nil {
 		return err
 	}
-	
+
 	// Kiểm tra thời gian booking phải là bội số của 15 phút
 	startMinute := startTime.Minute()
 	endMinute := endTime.Minute()
-	
+
 	if startMinute%15 != 0 || endMinute%15 != 0 {
 		return fmt.Errorf("booking time must be in 15-minute intervals")
 	}
-	
+
 	// Kiểm tra không được đặt lịch trong giờ ăn trưa (12:00 - 13:00)
 	startHour := startTime.Hour()
 	endHour := endTime.Hour()
-	
-	if (startHour == 12 && startTime.Minute() == 0) || 
-	   (endHour == 13 && endTime.Minute() == 0) ||
-	   (startHour < 12 && endHour > 13) {
+
+	if (startHour == 12 && startTime.Minute() == 0) ||
+		(endHour == 13 && endTime.Minute() == 0) ||
+		(startHour < 12 && endHour > 13) {
 		return fmt.Errorf("booking cannot be scheduled during lunch break (12:00 - 13:00)")
 	}
-	
+
 	return nil
 }

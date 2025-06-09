@@ -9,11 +9,13 @@ const (
 )
 
 type User struct {
-	ID       string   `json:"id" gorm:"primaryKey"`
-	Email    string   `json:"email" gorm:"unique;not null"`
-	Password string   `json:"-"`
-	FullName string   `json:"full_name"`
-	Role     UserRole `json:"role"`
+	ID            string   `json:"id" gorm:"primaryKey"`
+	Email         string   `json:"email" gorm:"unique;not null"`
+	PasswordHash  string   `json:"-" gorm:"column:password_hash;not null"`
+	FullName      string   `json:"full_name" gorm:"column:fullname;not null"`
+	Role          UserRole `json:"role" gorm:"type:varchar(20);default:'user'"`
+	Phone         string   `json:"phone" gorm:"type:varchar(20)"`
+	EmailVerified bool     `json:"email_verified" gorm:"default:false"`
 }
 
 type RegisterRequest struct {

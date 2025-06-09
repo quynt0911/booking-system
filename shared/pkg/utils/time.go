@@ -138,23 +138,23 @@ func (th *TimeHelper) AddBusinessDays(t time.Time, days int) time.Time {
 // GetTimeSlots returns available time slots for a day
 func (th *TimeHelper) GetTimeSlots(date time.Time, startHour, endHour, durationMinutes int) []TimeSlot {
 	var slots []TimeSlot
-	
+
 	start := time.Date(date.Year(), date.Month(), date.Day(), startHour, 0, 0, 0, th.location)
 	end := time.Date(date.Year(), date.Month(), date.Day(), endHour, 0, 0, 0, th.location)
 	duration := time.Duration(durationMinutes) * time.Minute
-	
+
 	for current := start; current.Before(end); current = current.Add(duration) {
 		slotEnd := current.Add(duration)
 		if slotEnd.After(end) {
 			break
 		}
-		
+
 		slots = append(slots, TimeSlot{
 			Start: current,
 			End:   slotEnd,
 		})
 	}
-	
+
 	return slots
 }
 
@@ -167,8 +167,8 @@ type TimeSlot struct {
 // String returns string representation of time slot
 func (ts TimeSlot) String() string {
 	th := NewTimeHelper()
-	return fmt.Sprintf("%s - %s", 
-		th.FormatTime(ts.Start), 
+	return fmt.Sprintf("%s - %s",
+		th.FormatTime(ts.Start),
 		th.FormatTime(ts.End))
 }
 

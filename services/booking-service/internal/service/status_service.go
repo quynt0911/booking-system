@@ -4,35 +4,39 @@ import (
 	"fmt"
 	"time"
 
-	"booking-service/internal/model"
-	"booking-service/internal/repository"
-	"shared/pkg/logger"
+	"github.com/google/uuid"
+
+	"booking-system/services/booking-service/internal/model"
+	"booking-system/services/booking-service/internal/repository"
+	"booking-system/services/booking-service/pkg/logger"
 )
 
 type StatusServiceInterface interface {
-	UpdateBookingStatus(bookingID uint, status string, changedBy uint, userRole, note string) error
-	GetBookingStatus(bookingID uint) (string, error)
-	GetStatusHistory(bookingID uint, userID uint, userRole string) ([]*model.StatusHistory, error)
-	ValidateStatusTransition(currentStatus, newStatus, userRole string) error
+	UpdateBookingStatus(bookingID uuid.UUID, status model.BookingStatus, changedBy uuid.UUID, userRole, note string) error
+	GetBookingStatus(bookingID uuid.UUID) (model.BookingStatus, error)
+	GetStatusHistory(bookingID uuid.UUID, userID uuid.UUID, userRole string) ([]*model.StatusHistory, error)
+	ValidateStatusTransition(currentStatus, newStatus model.BookingStatus, userRole string) error
 }
 
 type StatusService struct {
 	statusHistoryRepo repository.StatusHistoryRepositoryInterface
 	bookingRepo       repository.BookingRepositoryInterface
-	logger            logger.Logger
+	logger            logger.LoggerInterface
 }
 
 func NewStatusService(
 	statusHistoryRepo repository.StatusHistoryRepositoryInterface,
-	logger logger.Logger,
+	bookingRepo repository.BookingRepositoryInterface,
+	logger logger.LoggerInterface,
 ) StatusServiceInterface {
 	return &StatusService{
 		statusHistoryRepo: statusHistoryRepo,
+		bookingRepo:       bookingRepo,
 		logger:            logger,
 	}
 }
 
-func (s *StatusService) UpdateBookingStatus(bookingID uint, status string, changedBy uint, userRole, note string) error {
+func (s *StatusService) UpdateBookingStatus(bookingID uuid.UUID, status model.BookingStatus, changedBy uuid.UUID, userRole, note string) error {
 	// Get current booking
 	booking, err := s.bookingRepo.GetByID(bookingID)
 	if err != nil {
@@ -72,12 +76,12 @@ func (s *StatusService) UpdateBookingStatus(bookingID uint, status string, chang
 		// Don't return error as the main update succeeded
 	}
 
-	s.logger.Info(fmt.Sprintf("Booking %d status updated to %s by user %d", bookingID, status, changedBy))
+	s.logger.Info(fmt.Sprintf("Booking %s status updated to %s by user %s", bookingID, status, changedBy))
 
 	return nil
 }
 
-func (s *StatusService) GetBookingStatus(bookingID uint) (string, error) {
+func (s *StatusService) GetBookingStatus(bookingID uuid.UUID) (model.BookingStatus, error) {
 	booking, err := s.bookingRepo.GetByID(bookingID)
 	if err != nil {
 		return "", fmt.Errorf("booking not found")
@@ -86,7 +90,7 @@ func (s *StatusService) GetBookingStatus(bookingID uint) (string, error) {
 	return booking.Status, nil
 }
 
-func (s *StatusService) GetStatusHistory(bookingID uint, userID uint, userRole string) ([]*model.StatusHistory, error) {
+func (s *StatusService) GetStatusHistory(bookingID uuid.UUID, userID uuid.UUID, userRole string) ([]*model.StatusHistory, error) {
 	// Get booking to check authorization
 	booking, err := s.bookingRepo.GetByID(bookingID)
 	if err != nil {
@@ -94,9 +98,9 @@ func (s *StatusService) GetStatusHistory(bookingID uint, userID uint, userRole s
 	}
 
 	// Check authorization
-	if userRole != "admin" && 
-		 booking.UserID != userID && 
-		 booking.ExpertID != userID {
+	if userRole != "admin" &&
+		booking.UserID != userID &&
+		booking.ExpertID != userID {
 		return nil, fmt.Errorf("access denied")
 	}
 
@@ -106,16 +110,21 @@ func (s *StatusService) GetStatusHistory(bookingID uint, userID uint, userRole s
 		return nil, fmt.Errorf("failed to get status history: %v", err)
 	}
 
-	return history, nil
+	// Convert []model.StatusHistory to []*model.StatusHistory
+	historyPtrs := make([]*model.StatusHistory, len(history))
+	for i := range history {
+		historyPtrs[i] = &history[i]
+	}
+	return historyPtrs, nil
 }
 
-func (s *StatusService) ValidateStatusTransition(currentStatus, newStatus, userRole string) error {
+func (s *StatusService) ValidateStatusTransition(currentStatus, newStatus model.BookingStatus, userRole string) error {
 	// Define valid transitions
-	validTransitions := map[string][]string{
-		model.BookingStatusPending:    {model.BookingStatusConfirmed, model.BookingStatusCancelled},
-		model.BookingStatusConfirmed:  {model.BookingStatusCompleted, model.BookingStatusCancelled},
-		model.BookingStatusCompleted:  {},
-		model.BookingStatusCancelled:  {},
+	validTransitions := map[model.BookingStatus][]model.BookingStatus{
+		model.BookingStatusPending:   {model.BookingStatusConfirmed, model.BookingStatusCancelled},
+		model.BookingStatusConfirmed: {model.BookingStatusCompleted, model.BookingStatusCancelled},
+		model.BookingStatusCompleted: {},
+		model.BookingStatusCancelled: {},
 	}
 
 	// Admin can change to any status
@@ -136,7 +145,7 @@ func (s *StatusService) ValidateStatusTransition(currentStatus, newStatus, userR
 }
 
 // checkStatusUpdateAuthorization checks if the user is authorized to update the booking status.
-func (s *StatusService) checkStatusUpdateAuthorization(booking *model.Booking, userID uint, userRole string) error {
+func (s *StatusService) checkStatusUpdateAuthorization(booking *model.Booking, userID uuid.UUID, userRole string) error {
 	if userRole == "admin" {
 		return nil
 	}

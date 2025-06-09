@@ -1,44 +1,50 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"github.com/go-redis/redis/v8"
-	"booking-service/internal/model"
-	"booking-service/internal/repository"
-	"shared/pkg/logger"
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+
+	"booking-system/services/booking-service/internal/model"
+	"booking-system/services/booking-service/internal/repository"
+	"booking-system/services/booking-service/pkg/logger"
 )
 
 type BookingServiceInterface interface {
-	CreateBooking(userID uint, req *model.CreateBookingRequest) (*model.Booking, error)
-	GetBookingByID(bookingID uint) (*model.Booking, error)
-	UpdateBooking(bookingID uint, req *model.UpdateBookingRequest) (*model.Booking, error)
-	CancelBooking(bookingID uint, userID uint) error
-	GetUserBookings(userID uint, page, limit int, status string) ([]*model.Booking, int, error)
-	GetExpertBookings(expertID uint, page, limit int, status, date string) ([]*model.Booking, int, error)
-	GetBookingHistory(userID uint, page, limit int, status string, startDate, endDate *time.Time) ([]*model.Booking, int, error)
-	GetExpertHistory(expertID uint, page, limit int, status string, startDate, endDate *time.Time) ([]*model.Booking, int, error)
-	GetBookingStatistics(userID uint, userRole, period string, year, month int) (map[string]interface{}, error)
-	GetUpcomingUserBookings(userID uint, limit, days int) ([]*model.Booking, error)
-	GetUpcomingExpertBookings(expertID uint, limit, days int) ([]*model.Booking, error)
-	GetPastUserBookings(userID uint, page, limit int) ([]*model.Booking, int, error)
-	GetPastExpertBookings(expertID uint, page, limit int) ([]*model.Booking, int, error)
+	CreateBooking(userID uuid.UUID, req *model.CreateBookingRequest) (*model.BookingResponse, error)
+	GetBookingByID(bookingID uuid.UUID) (*model.BookingResponse, error)
+	UpdateBooking(bookingID uuid.UUID, req *model.UpdateBookingRequest) (*model.BookingResponse, error)
+	CancelBooking(bookingID uuid.UUID, userID uuid.UUID, req *model.CancelBookingRequest) error
+	GetUserBookings(userID uuid.UUID, req *model.GetBookingsRequest) ([]model.BookingResponse, int64, error)
+	GetExpertBookings(expertID uuid.UUID, req *model.GetBookingsRequest) ([]model.BookingResponse, int64, error)
+	GetBookingHistory(userID uuid.UUID, req *model.GetHistoryRequest) ([]model.StatusHistoryResponse, int64, error)
+	GetExpertHistory(expertID uuid.UUID, req *model.GetHistoryRequest) ([]model.StatusHistoryResponse, int64, error)
+	GetBookingStatistics(userID uuid.UUID, userRole, period string, year, month int) (*model.BookingStatsResponse, error)
+	GetUpcomingUserBookings(userID uuid.UUID, limit, days int) ([]model.BookingResponse, error)
+	GetUpcomingExpertBookings(expertID uuid.UUID, limit, days int) ([]model.BookingResponse, error)
+	GetPastUserBookings(userID uuid.UUID, page, limit int) ([]model.BookingResponse, int64, error)
+	GetPastExpertBookings(expertID uuid.UUID, page, limit int) ([]model.BookingResponse, int64, error)
+	CheckConflict(req *model.CheckConflictRequest) (*model.ConflictCheckResponse, error)
+	CheckConflictWithExclusion(req *model.CheckConflictRequest, excludeID uuid.UUID) (*model.ConflictCheckResponse, error)
+	GetExpertBookingsByDate(expertID uuid.UUID, date time.Time) ([]model.BookingResponse, error)
 }
 
 type BookingService struct {
 	bookingRepo       repository.BookingRepositoryInterface
 	statusHistoryRepo repository.StatusHistoryRepositoryInterface
 	redisClient       *redis.Client
-	logger            logger.Logger
+	logger            logger.LoggerInterface
 }
 
 func NewBookingService(
 	bookingRepo repository.BookingRepositoryInterface,
 	statusHistoryRepo repository.StatusHistoryRepositoryInterface,
 	redisClient *redis.Client,
-	logger logger.Logger,
+	logger logger.LoggerInterface,
 ) BookingServiceInterface {
 	return &BookingService{
 		bookingRepo:       bookingRepo,
@@ -48,18 +54,26 @@ func NewBookingService(
 	}
 }
 
-func (s *BookingService) CreateBooking(userID uint, req *model.CreateBookingRequest) (*model.Booking, error) {
+func (s *BookingService) CreateBooking(userID uuid.UUID, req *model.CreateBookingRequest) (*model.BookingResponse, error) {
+	// Validate request
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid request: %v", err)
+	}
+
 	// Create booking model
 	booking := &model.Booking{
-		UserID:      userID,
-		ExpertID:    req.ExpertID,
-		StartTime:   req.StartTime,
-		EndTime:     req.EndTime,
-		Type:        req.Type,
-		Note:        req.Note,
-		Status:      model.BookingStatusPending,
-		CreatedAt:   time.Now(),
-		UpdatedAt:   time.Now(),
+		UserID:          userID,
+		ExpertID:        req.ExpertID,
+		ScheduledTime:   req.ScheduledTime,
+		DurationMinutes: req.DurationMinutes,
+		MeetingType:     req.MeetingType,
+		Status:          model.BookingStatusPending,
+		MeetingAddress:  req.MeetingAddress,
+		MeetingURL:      req.MeetingURL,
+		Notes:           req.Notes,
+		Price:           req.Price,
+		CreatedAt:       time.Now(),
+		UpdatedAt:       time.Now(),
 	}
 
 	// Save booking to database
@@ -70,11 +84,11 @@ func (s *BookingService) CreateBooking(userID uint, req *model.CreateBookingRequ
 
 	// Create initial status history
 	statusHistory := &model.StatusHistory{
-		BookingID:   createdBooking.ID,
-		Status:      model.BookingStatusPending,
-		ChangedBy:   userID,
-		ChangedAt:   time.Now(),
-		Note:        "Booking created",
+		BookingID: createdBooking.ID,
+		Status:    model.BookingStatusPending,
+		ChangedBy: userID,
+		ChangedAt: time.Now(),
+		Note:      "Booking created",
 	}
 
 	if err := s.statusHistoryRepo.Create(statusHistory); err != nil {
@@ -87,13 +101,13 @@ func (s *BookingService) CreateBooking(userID uint, req *model.CreateBookingRequ
 	// TODO: Send notification to expert
 	s.notifyBookingCreated(createdBooking)
 
-	return createdBooking, nil
+	return s.convertToBookingResponse(createdBooking), nil
 }
 
-func (s *BookingService) GetBookingByID(bookingID uint) (*model.Booking, error) {
+func (s *BookingService) GetBookingByID(bookingID uuid.UUID) (*model.BookingResponse, error) {
 	// Try to get from cache first
 	if booking := s.getBookingFromCache(bookingID); booking != nil {
-		return booking, nil
+		return s.convertToBookingResponse(booking), nil
 	}
 
 	// Get from database
@@ -105,28 +119,37 @@ func (s *BookingService) GetBookingByID(bookingID uint) (*model.Booking, error) 
 	// Cache the result
 	s.cacheBooking(booking)
 
-	return booking, nil
+	return s.convertToBookingResponse(booking), nil
 }
 
-func (s *BookingService) UpdateBooking(bookingID uint, req *model.UpdateBookingRequest) (*model.Booking, error) {
+func (s *BookingService) UpdateBooking(bookingID uuid.UUID, req *model.UpdateBookingRequest) (*model.BookingResponse, error) {
 	// Get existing booking
-	booking, err := s.GetBookingByID(bookingID)
+	booking, err := s.bookingRepo.GetByID(bookingID)
 	if err != nil {
 		return nil, err
 	}
 
 	// Update fields
-	if req.StartTime != nil {
-		booking.StartTime = *req.StartTime
+	if req.ScheduledTime != nil {
+		booking.ScheduledTime = *req.ScheduledTime
 	}
-	if req.EndTime != nil {
-		booking.EndTime = *req.EndTime
+	if req.DurationMinutes != nil {
+		booking.DurationMinutes = *req.DurationMinutes
 	}
-	if req.Note != nil {
-		booking.Note = *req.Note
+	if req.Notes != nil {
+		booking.Notes = *req.Notes
 	}
-	if req.Type != nil {
-		booking.Type = *req.Type
+	if req.MeetingType != nil {
+		booking.MeetingType = *req.MeetingType
+	}
+	if req.MeetingAddress != nil {
+		booking.MeetingAddress = *req.MeetingAddress
+	}
+	if req.MeetingURL != nil {
+		booking.MeetingURL = *req.MeetingURL
+	}
+	if req.Price != nil {
+		booking.Price = *req.Price
 	}
 
 	booking.UpdatedAt = time.Now()
@@ -143,33 +166,34 @@ func (s *BookingService) UpdateBooking(bookingID uint, req *model.UpdateBookingR
 	// TODO: Send notification about update
 	s.notifyBookingUpdated(updatedBooking)
 
-	return updatedBooking, nil
+	return s.convertToBookingResponse(updatedBooking), nil
 }
 
-func (s *BookingService) CancelBooking(bookingID uint, userID uint) error {
+func (s *BookingService) CancelBooking(bookingID uuid.UUID, userID uuid.UUID, req *model.CancelBookingRequest) error {
 	// Get existing booking
-	booking, err := s.GetBookingByID(bookingID)
+	booking, err := s.bookingRepo.GetByID(bookingID)
 	if err != nil {
 		return err
 	}
 
-	// Update status to cancelled
-	booking.Status = model.BookingStatusCancelled
-	booking.UpdatedAt = time.Now()
+	// Check if booking can be cancelled
+	if !booking.CanBeCancelled() {
+		return fmt.Errorf("booking cannot be cancelled")
+	}
 
-	// Save to database
-	_, err = s.bookingRepo.Update(booking)
+	// Update status to cancelled
+	err = s.bookingRepo.UpdateStatus(bookingID, model.BookingStatusCancelled)
 	if err != nil {
 		return fmt.Errorf("failed to cancel booking: %v", err)
 	}
 
 	// Create status history
 	statusHistory := &model.StatusHistory{
-		BookingID:   bookingID,
-		Status:      model.BookingStatusCancelled,
-		ChangedBy:   userID,
-		ChangedAt:   time.Now(),
-		Note:        "Booking cancelled by user",
+		BookingID: bookingID,
+		Status:    model.BookingStatusCancelled,
+		ChangedBy: userID,
+		ChangedAt: time.Now(),
+		Note:      req.Reason,
 	}
 
 	if err := s.statusHistoryRepo.Create(statusHistory); err != nil {
@@ -185,106 +209,271 @@ func (s *BookingService) CancelBooking(bookingID uint, userID uint) error {
 	return nil
 }
 
-func (s *BookingService) GetUserBookings(userID uint, page, limit int, status string) ([]*model.Booking, int, error) {
-	offset := (page - 1) * limit
-	return s.bookingRepo.GetByUserID(userID, offset, limit, status)
-}
-
-func (s *BookingService) GetExpertBookings(expertID uint, page, limit int, status, date string) ([]*model.Booking, int, error) {
-	offset := (page - 1) * limit
-	return s.bookingRepo.GetByExpertID(expertID, offset, limit, status, date)
-}
-
-func (s *BookingService) GetBookingHistory(userID uint, page, limit int, status string, startDate, endDate *time.Time) ([]*model.Booking, int, error) {
-	offset := (page - 1) * limit
-	return s.bookingRepo.GetHistoryByUserID(userID, offset, limit, status, startDate, endDate)
-}
-
-func (s *BookingService) GetExpertHistory(expertID uint, page, limit int, status string, startDate, endDate *time.Time) ([]*model.Booking, int, error) {
-	offset := (page - 1) * limit
-	return s.bookingRepo.GetHistoryByExpertID(expertID, offset, limit, status, startDate, endDate)
-}
-
-func (s *BookingService) GetBookingStatistics(userID uint, userRole, period string, year, month int) (map[string]interface{}, error) {
-	var stats map[string]interface{}
-	var err error
-
-	if userRole == "expert" {
-		stats, err = s.bookingRepo.GetExpertStatistics(userID, period, year, month)
-	} else {
-		stats, err = s.bookingRepo.GetUserStatistics(userID, period, year, month)
+func (s *BookingService) GetUserBookings(userID uuid.UUID, req *model.GetBookingsRequest) ([]model.BookingResponse, int64, error) {
+	filter := &model.BookingFilter{
+		UserID:    &userID,
+		Status:    req.Status,
+		Type:      req.Type,
+		StartDate: req.StartDate,
+		EndDate:   req.EndDate,
+		Page:      req.Page,
+		Limit:     req.Limit,
+		SortBy:    req.SortBy,
+		SortOrder: req.SortOrder,
 	}
 
+	bookings, total, err := s.bookingRepo.GetByUserID(userID, filter)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get statistics: %v", err)
+		return nil, 0, err
 	}
 
-	return stats, nil
+	// Convert to response
+	responses := make([]model.BookingResponse, len(bookings))
+	for i, booking := range bookings {
+		responses[i] = *s.convertToBookingResponse(&booking)
+	}
+
+	return responses, total, nil
 }
 
-func (s *BookingService) GetUpcomingUserBookings(userID uint, limit, days int) ([]*model.Booking, error) {
+func (s *BookingService) GetExpertBookings(expertID uuid.UUID, req *model.GetBookingsRequest) ([]model.BookingResponse, int64, error) {
+	filter := &model.BookingFilter{
+		ExpertID:  &expertID,
+		Status:    req.Status,
+		Type:      req.Type,
+		StartDate: req.StartDate,
+		EndDate:   req.EndDate,
+		Page:      req.Page,
+		Limit:     req.Limit,
+		SortBy:    req.SortBy,
+		SortOrder: req.SortOrder,
+	}
+
+	bookings, total, err := s.bookingRepo.GetByExpertID(expertID, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Convert to response
+	responses := make([]model.BookingResponse, len(bookings))
+	for i, booking := range bookings {
+		responses[i] = *s.convertToBookingResponse(&booking)
+	}
+
+	return responses, total, nil
+}
+
+func (s *BookingService) GetBookingHistory(userID uuid.UUID, req *model.GetHistoryRequest) ([]model.StatusHistoryResponse, int64, error) {
+	histories, total, err := s.statusHistoryRepo.GetHistoryByUserID(userID, req)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Convert to response
+	responses := make([]model.StatusHistoryResponse, len(histories))
+	for i, history := range histories {
+		responses[i] = model.StatusHistoryResponse{
+			StatusHistory: &history,
+		}
+	}
+
+	return responses, total, nil
+}
+
+func (s *BookingService) GetExpertHistory(expertID uuid.UUID, req *model.GetHistoryRequest) ([]model.StatusHistoryResponse, int64, error) {
+	histories, total, err := s.statusHistoryRepo.GetHistoryByExpertID(expertID, req)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Convert to response
+	responses := make([]model.StatusHistoryResponse, len(histories))
+	for i, history := range histories {
+		responses[i] = model.StatusHistoryResponse{
+			StatusHistory: &history,
+		}
+	}
+
+	return responses, total, nil
+}
+
+func (s *BookingService) GetBookingStatistics(userID uuid.UUID, userRole, period string, year, month int) (*model.BookingStatsResponse, error) {
+	if userRole == "expert" {
+		return s.bookingRepo.GetBookingStats(nil, &userID, nil, nil)
+	}
+	return s.bookingRepo.GetBookingStats(&userID, nil, nil, nil)
+}
+
+func (s *BookingService) GetUpcomingUserBookings(userID uuid.UUID, limit, days int) ([]model.BookingResponse, error) {
 	endDate := time.Now().AddDate(0, 0, days)
-	return s.bookingRepo.GetUpcomingByUserID(userID, limit, endDate)
+	bookings, err := s.bookingRepo.GetUpcomingByUserID(userID, limit, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response
+	responses := make([]model.BookingResponse, len(bookings))
+	for i, booking := range bookings {
+		responses[i] = *s.convertToBookingResponse(booking)
+	}
+
+	return responses, nil
 }
 
-func (s *BookingService) GetUpcomingExpertBookings(expertID uint, limit, days int) ([]*model.Booking, error) {
+func (s *BookingService) GetUpcomingExpertBookings(expertID uuid.UUID, limit, days int) ([]model.BookingResponse, error) {
 	endDate := time.Now().AddDate(0, 0, days)
-	return s.bookingRepo.GetUpcomingByExpertID(expertID, limit, endDate)
+	bookings, err := s.bookingRepo.GetUpcomingByExpertID(expertID, limit, endDate)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response
+	responses := make([]model.BookingResponse, len(bookings))
+	for i, booking := range bookings {
+		responses[i] = *s.convertToBookingResponse(booking)
+	}
+
+	return responses, nil
 }
 
-func (s *BookingService) GetPastUserBookings(userID uint, page, limit int) ([]*model.Booking, int, error) {
-	offset := (page - 1) * limit
-	return s.bookingRepo.GetPastByUserID(userID, offset, limit)
+func (s *BookingService) GetPastUserBookings(userID uuid.UUID, page, limit int) ([]model.BookingResponse, int64, error) {
+	bookings, total, err := s.bookingRepo.GetPastByUserID(userID, page, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Convert to response
+	responses := make([]model.BookingResponse, len(bookings))
+	for i, booking := range bookings {
+		responses[i] = *s.convertToBookingResponse(booking)
+	}
+
+	return responses, int64(total), nil
 }
 
-func (s *BookingService) GetPastExpertBookings(expertID uint, page, limit int) ([]*model.Booking, int, error) {
-	offset := (page - 1) * limit
-	return s.bookingRepo.GetPastByExpertID(expertID, offset, limit)
+func (s *BookingService) GetPastExpertBookings(expertID uuid.UUID, page, limit int) ([]model.BookingResponse, int64, error) {
+	bookings, total, err := s.bookingRepo.GetPastByExpertID(expertID, page, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Convert to response
+	responses := make([]model.BookingResponse, len(bookings))
+	for i, booking := range bookings {
+		responses[i] = *s.convertToBookingResponse(booking)
+	}
+
+	return responses, int64(total), nil
 }
 
-// Cache helper methods
+func (s *BookingService) CheckConflict(req *model.CheckConflictRequest) (*model.ConflictCheckResponse, error) {
+	conflicts, err := s.bookingRepo.CheckConflict(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response
+	responses := make([]model.BookingResponse, len(conflicts))
+	for i, booking := range conflicts {
+		responses[i] = *s.convertToBookingResponse(&booking)
+	}
+
+	return &model.ConflictCheckResponse{
+		HasConflict:      len(conflicts) > 0,
+		ConflictBookings: responses,
+	}, nil
+}
+
+func (s *BookingService) CheckConflictWithExclusion(req *model.CheckConflictRequest, excludeID uuid.UUID) (*model.ConflictCheckResponse, error) {
+	req.ExcludeID = &excludeID
+	conflicts, err := s.bookingRepo.CheckConflict(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response
+	responses := make([]model.BookingResponse, len(conflicts))
+	for i, booking := range conflicts {
+		responses[i] = *s.convertToBookingResponse(&booking)
+	}
+
+	return &model.ConflictCheckResponse{
+		HasConflict:      len(conflicts) > 0,
+		ConflictBookings: responses,
+	}, nil
+}
+
+func (s *BookingService) GetExpertBookingsByDate(expertID uuid.UUID, date time.Time) ([]model.BookingResponse, error) {
+	bookings, err := s.bookingRepo.GetExpertBookingsByDate(expertID, date)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert to response
+	responses := make([]model.BookingResponse, len(bookings))
+	for i, booking := range bookings {
+		responses[i] = *s.convertToBookingResponse(&booking)
+	}
+
+	return responses, nil
+}
+
+// Helper function to convert Booking to BookingResponse
+func (s *BookingService) convertToBookingResponse(booking *model.Booking) *model.BookingResponse {
+	return &model.BookingResponse{
+		Booking:        booking,
+		CanBeCancelled: booking.CanBeCancelled(),
+		CanBeConfirmed: booking.CanBeConfirmed(),
+		IsExpired:      booking.IsExpired(),
+		Duration:       booking.DurationMinutes,
+	}
+}
+
+// Helper function to cache booking data
 func (s *BookingService) cacheBooking(booking *model.Booking) {
-	key := fmt.Sprintf("booking:%d", booking.ID)
+	ctx := context.Background()
+	key := fmt.Sprintf("booking:%s", booking.ID.String())
 	data, err := json.Marshal(booking)
 	if err != nil {
-		s.logger.Error("Failed to marshal booking for cache", err)
+		s.logger.Error("Failed to marshal booking data", err)
 		return
 	}
 
-	err = s.redisClient.Set(s.redisClient.Context(), key, data, 15*time.Minute).Err()
+	err = s.redisClient.Set(ctx, key, data, 24*time.Hour).Err()
 	if err != nil {
-		s.logger.Error("Failed to cache booking", err)
+		s.logger.Error("Failed to cache booking data", err)
 	}
 }
 
-func (s *BookingService) getBookingFromCache(bookingID uint) *model.Booking {
-	key := fmt.Sprintf("booking:%d", bookingID)
-	data, err := s.redisClient.Get(s.redisClient.Context(), key).Result()
+// Helper function to get booking from cache
+func (s *BookingService) getBookingFromCache(bookingID uuid.UUID) *model.Booking {
+	ctx := context.Background()
+	key := fmt.Sprintf("booking:%s", bookingID.String())
+	data, err := s.redisClient.Get(ctx, key).Bytes()
 	if err != nil {
 		return nil
 	}
 
 	var booking model.Booking
-	if err := json.Unmarshal([]byte(data), &booking); err != nil {
-		s.logger.Error("Failed to unmarshal cached booking", err)
+	if err := json.Unmarshal(data, &booking); err != nil {
+		s.logger.Error("Failed to unmarshal booking data", err)
 		return nil
 	}
 
 	return &booking
 }
 
-// Notification helper methods (placeholders)
+// Helper function to notify about booking creation
 func (s *BookingService) notifyBookingCreated(booking *model.Booking) {
-	// TODO: Integrate with notification service
-	s.logger.Info(fmt.Sprintf("Booking created: %d", booking.ID))
+	// TODO: Implement notification logic
 }
 
+// Helper function to notify about booking update
 func (s *BookingService) notifyBookingUpdated(booking *model.Booking) {
-	// TODO: Integrate with notification service
-	s.logger.Info(fmt.Sprintf("Booking updated: %d", booking.ID))
+	// TODO: Implement notification logic
 }
 
+// Helper function to notify about booking cancellation
 func (s *BookingService) notifyBookingCancelled(booking *model.Booking) {
-	// TODO: Integrate with notification service
-	s.logger.Info(fmt.Sprintf("Booking cancelled: %d", booking.ID))
+	// TODO: Implement notification logic
 }

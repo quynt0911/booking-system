@@ -1,39 +1,52 @@
-version: '3.8'
-
 services:
   postgres:
-    image: postgres:15-alpine
+    image: postgis/postgis:13-3.1
     environment:
-      POSTGRES_DB: consultation_booking
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: booking_system
+      POSTGRES_USER: directus
+      POSTGRES_PASSWORD: directus
+      PGDATA: /var/lib/postgresql/data/pgdata
     ports:
-      - "5434:5432"
+      - "5435:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U directus -d booking_system"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     networks:
       - consultation_network
 
   redis:
-    image: redis:7-alpine
+    image: redis:6-alpine
     ports:
-      - "6379:6379"
+      - "6380:6379"
     volumes:
       - redis_data:/data
-      - ./infrastructure/redis/redis.conf:/usr/local/etc/redis/redis.conf
-    command: redis-server /usr/local/etc/redis/redis.conf
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     networks:
       - consultation_network
 
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
-      - "443:443"
+      - "8082:80"
+      - "8444:443"
     volumes:
-      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf
-      - ./infrastructure/nginx/sites-available:/etc/nginx/sites-available
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infrastructure/nginx/sites-available:/etc/nginx/sites-available:ro
+    depends_on:
+      - user-service
+      - booking-service
     networks:
       - consultation_network
 
@@ -42,12 +55,62 @@ services:
       context: ./services/user-service
     container_name: user-service
     environment:
-      - USER_SERVICE_DSN=host=postgres user=postgres password=password123 dbname=user_service_db port=5432 sslmode=disable
+      - USER_SERVICE_DSN=host=postgres user=directus password=directus dbname=booking_system port=5432 sslmode=disable
       - JWT_SECRET=your-secret
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
-      - "8080:8080"
+      - "8083:8080"
+    networks:
+      - consultation_network
+
+  booking-service:
+    build:
+      context: ./services/booking-service
+    container_name: booking-service
+    environment:
+      - BOOKING_SERVICE_DSN=host=postgres user=directus password=directus dbname=booking_system port=5432 sslmode=disable
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-secret
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8084:8080"
+    networks:
+      - consultation_network
+
+  directus:
+    image: directus/directus:11.5.1
+    container_name: directus
+    ports:
+      - "8055:8055"
+    volumes:
+      - ./uploads:/directus/uploads
+      - ./extensions:/directus/extensions
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SECRET: 'supersecretkey1234567890abcdef'
+      DB_CLIENT: 'pg'
+      DB_HOST: 'postgres'
+      DB_PORT: '5432'
+      DB_DATABASE: 'booking_system'
+      DB_USER: 'directus'
+      DB_PASSWORD: 'directus'
+      CACHE_ENABLED: 'true'
+      CACHE_AUTO_PURGE: 'true'
+      CACHE_STORE: 'redis'
+      REDIS: 'redis://redis:6379'
+      ADMIN_EMAIL: 'admin@example.com'
+      ADMIN_PASSWORD: '123456'
+      PUBLIC_URL: 'http://localhost:8055'
     networks:
       - consultation_network
 

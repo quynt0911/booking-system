@@ -6,17 +6,20 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
+	"booking-system/services/booking-service/internal/model"
 	"booking-system/services/booking-service/internal/service"
-	"booking-system/shared/pkg/logger"
+	"booking-system/services/booking-service/pkg/logger"
 	"booking-system/shared/pkg/utils"
 )
 
 type HistoryHandler struct {
 	bookingService service.BookingServiceInterface
-	logger         logger.Logger
+	logger         logger.LoggerInterface
 }
 
-func NewHistoryHandler(bookingService service.BookingServiceInterface, logger logger.Logger) *HistoryHandler {
+func NewHistoryHandler(bookingService service.BookingServiceInterface, logger logger.LoggerInterface) *HistoryHandler {
 	return &HistoryHandler{
 		bookingService: bookingService,
 		logger:         logger,
@@ -25,12 +28,23 @@ func NewHistoryHandler(bookingService service.BookingServiceInterface, logger lo
 
 // GetBookingHistory retrieves booking history for a user
 func (h *HistoryHandler) GetBookingHistory(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("user_id not found in context")
+		c.JSON(http.StatusUnauthorized, utils.ErrorResponse("Unauthorized"))
+		return
+	}
+	userID, ok := userIDVal.(uuid.UUID)
+	if !ok {
+		h.logger.Error("user_id is not of type uuid.UUID")
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Internal server error"))
+		return
+	}
+
 	// Parse query parameters
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	status := c.Query("status")
+	statusStr := c.Query("status")
 	startDateStr := c.Query("start_date")
 	endDateStr := c.Query("end_date")
 
@@ -56,14 +70,23 @@ func (h *HistoryHandler) GetBookingHistory(c *gin.Context) {
 		}
 	}
 
-	bookings, total, err := h.bookingService.GetBookingHistory(
-		userID.(uint),
-		page,
-		limit,
-		status,
-		startDate,
-		endDate,
-	)
+	// Convert status string to BookingStatus
+	var status *model.BookingStatus
+	if statusStr != "" {
+		bookingStatus := model.BookingStatus(statusStr)
+		status = &bookingStatus
+	}
+
+	// Create request object
+	req := &model.GetHistoryRequest{
+		Page:      page,
+		Limit:     limit,
+		NewStatus: status,
+		StartDate: startDate,
+		EndDate:   endDate,
+	}
+
+	bookings, total, err := h.bookingService.GetBookingHistory(userID, req)
 	if err != nil {
 		h.logger.Error("Failed to get booking history", err)
 		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to retrieve booking history"))
@@ -76,10 +99,10 @@ func (h *HistoryHandler) GetBookingHistory(c *gin.Context) {
 			"page":        page,
 			"limit":       limit,
 			"total":       total,
-			"total_pages": (total + limit - 1) / limit,
+			"total_pages": (total + int64(limit) - 1) / int64(limit),
 		},
 		"filters": map[string]interface{}{
-			"status":     status,
+			"status":     statusStr,
 			"start_date": startDateStr,
 			"end_date":   endDateStr,
 		},
@@ -90,12 +113,23 @@ func (h *HistoryHandler) GetBookingHistory(c *gin.Context) {
 
 // GetExpertHistory retrieves booking history for an expert
 func (h *HistoryHandler) GetExpertHistory(c *gin.Context) {
-	expertID, _ := c.Get("user_id")
-	
+	expertIDVal, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("user_id not found in context")
+		c.JSON(http.StatusUnauthorized, utils.ErrorResponse("Unauthorized"))
+		return
+	}
+	expertID, ok := expertIDVal.(uuid.UUID)
+	if !ok {
+		h.logger.Error("user_id is not of type uuid.UUID")
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Internal server error"))
+		return
+	}
+
 	// Parse query parameters
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
-	status := c.Query("status")
+	statusStr := c.Query("status")
 	startDateStr := c.Query("start_date")
 	endDateStr := c.Query("end_date")
 
@@ -120,14 +154,23 @@ func (h *HistoryHandler) GetExpertHistory(c *gin.Context) {
 		}
 	}
 
-	bookings, total, err := h.bookingService.GetExpertHistory(
-		expertID.(uint),
-		page,
-		limit,
-		status,
-		startDate,
-		endDate,
-	)
+	// Convert status string to BookingStatus
+	var status *model.BookingStatus
+	if statusStr != "" {
+		bookingStatus := model.BookingStatus(statusStr)
+		status = &bookingStatus
+	}
+
+	// Create request object
+	req := &model.GetHistoryRequest{
+		Page:      page,
+		Limit:     limit,
+		NewStatus: status,
+		StartDate: startDate,
+		EndDate:   endDate,
+	}
+
+	bookings, total, err := h.bookingService.GetExpertHistory(expertID, req)
 	if err != nil {
 		h.logger.Error("Failed to get expert history", err)
 		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to retrieve expert history"))
@@ -140,10 +183,10 @@ func (h *HistoryHandler) GetExpertHistory(c *gin.Context) {
 			"page":        page,
 			"limit":       limit,
 			"total":       total,
-			"total_pages": (total + limit - 1) / limit,
+			"total_pages": (total + int64(limit) - 1) / int64(limit),
 		},
 		"filters": map[string]interface{}{
-			"status":     status,
+			"status":     statusStr,
 			"start_date": startDateStr,
 			"end_date":   endDateStr,
 		},
@@ -152,37 +195,34 @@ func (h *HistoryHandler) GetExpertHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, utils.SuccessResponse("Expert history retrieved successfully", response))
 }
 
-// GetBookingStatistics retrieves booking statistics for a user or expert
-func (h *HistoryHandler) GetBookingStatistics(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	userRole, _ := c.Get("user_role")
-	
-	// Parse query parameters
-	period := c.DefaultQuery("period", "month") // week, month, year
-	year, _ := strconv.Atoi(c.DefaultQuery("year", strconv.Itoa(time.Now().Year())))
-	month, _ := strconv.Atoi(c.DefaultQuery("month", strconv.Itoa(int(time.Now().Month()))))
-
-	stats, err := h.bookingService.GetBookingStatistics(
-		userID.(uint),
-		userRole.(string),
-		period,
-		year,
-		month,
-	)
-	if err != nil {
-		h.logger.Error("Failed to get booking statistics", err)
-		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to retrieve statistics"))
+// GetUpcomingBookings retrieves upcoming bookings for a user or expert
+func (h *HistoryHandler) GetUpcomingBookings(c *gin.Context) {
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("user_id not found in context")
+		c.JSON(http.StatusUnauthorized, utils.ErrorResponse("Unauthorized"))
+		return
+	}
+	userID, ok := userIDVal.(uuid.UUID)
+	if !ok {
+		h.logger.Error("user_id is not of type uuid.UUID")
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Internal server error"))
 		return
 	}
 
-	c.JSON(http.StatusOK, utils.SuccessResponse("Statistics retrieved successfully", stats))
-}
+	userRoleVal, exists := c.Get("user_role")
+	if !exists {
+		h.logger.Error("user_role not found in context")
+		c.JSON(http.StatusUnauthorized, utils.ErrorResponse("Unauthorized"))
+		return
+	}
+	userRole, ok := userRoleVal.(string)
+	if !ok {
+		h.logger.Error("user_role is not of type string")
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Internal server error"))
+		return
+	}
 
-// GetUpcomingBookings retrieves upcoming bookings for a user
-func (h *HistoryHandler) GetUpcomingBookings(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	userRole, _ := c.Get("user_role")
-	
 	// Parse query parameters
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
 	days, _ := strconv.Atoi(c.DefaultQuery("days", "7")) // next 7 days by default
@@ -198,9 +238,9 @@ func (h *HistoryHandler) GetUpcomingBookings(c *gin.Context) {
 	var err error
 
 	if userRole == "expert" {
-		bookings, err = h.bookingService.GetUpcomingExpertBookings(userID.(uint), limit, days)
+		bookings, err = h.bookingService.GetUpcomingExpertBookings(userID, limit, days)
 	} else {
-		bookings, err = h.bookingService.GetUpcomingUserBookings(userID.(uint), limit, days)
+		bookings, err = h.bookingService.GetUpcomingUserBookings(userID, limit, days)
 	}
 
 	if err != nil {
@@ -212,11 +252,34 @@ func (h *HistoryHandler) GetUpcomingBookings(c *gin.Context) {
 	c.JSON(http.StatusOK, utils.SuccessResponse("Upcoming bookings retrieved successfully", bookings))
 }
 
-// GetPastBookings retrieves past bookings for a user
+// GetPastBookings retrieves past bookings for a user or expert
 func (h *HistoryHandler) GetPastBookings(c *gin.Context) {
-	userID, _ := c.Get("user_id")
-	userRole, _ := c.Get("user_role")
-	
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		h.logger.Error("user_id not found in context")
+		c.JSON(http.StatusUnauthorized, utils.ErrorResponse("Unauthorized"))
+		return
+	}
+	userID, ok := userIDVal.(uuid.UUID)
+	if !ok {
+		h.logger.Error("user_id is not of type uuid.UUID")
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Internal server error"))
+		return
+	}
+
+	userRoleVal, exists := c.Get("user_role")
+	if !exists {
+		h.logger.Error("user_role not found in context")
+		c.JSON(http.StatusUnauthorized, utils.ErrorResponse("Unauthorized"))
+		return
+	}
+	userRole, ok := userRoleVal.(string)
+	if !ok {
+		h.logger.Error("user_role is not of type string")
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Internal server error"))
+		return
+	}
+
 	// Parse query parameters
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
@@ -229,13 +292,13 @@ func (h *HistoryHandler) GetPastBookings(c *gin.Context) {
 	}
 
 	var bookings interface{}
-	var total int
+	var total int64
 	var err error
 
 	if userRole == "expert" {
-		bookings, total, err = h.bookingService.GetPastExpertBookings(userID.(uint), page, limit)
+		bookings, total, err = h.bookingService.GetPastExpertBookings(userID, page, limit)
 	} else {
-		bookings, total, err = h.bookingService.GetPastUserBookings(userID.(uint), page, limit)
+		bookings, total, err = h.bookingService.GetPastUserBookings(userID, page, limit)
 	}
 
 	if err != nil {
@@ -250,7 +313,7 @@ func (h *HistoryHandler) GetPastBookings(c *gin.Context) {
 			"page":        page,
 			"limit":       limit,
 			"total":       total,
-			"total_pages": (total + limit - 1) / limit,
+			"total_pages": (total + int64(limit) - 1) / int64(limit),
 		},
 	}
 

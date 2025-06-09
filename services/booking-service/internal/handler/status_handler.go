@@ -2,21 +2,43 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
 	"booking-system/services/booking-service/internal/model"
 	"booking-system/services/booking-service/internal/service"
-	"booking-system/shared/pkg/logger"
+	"booking-system/services/booking-service/pkg/logger"
 	"booking-system/shared/pkg/utils"
 )
 
-type StatusHandler struct {
-	statusService service.StatusServiceInterface
-	logger        logger.Logger
+// UpdateStatusRequest represents the request body for updating booking status
+type UpdateStatusRequest struct {
+	Status model.BookingStatus `json:"status" binding:"required"`
+	Note   string              `json:"note"`
 }
 
-func NewStatusHandler(statusService service.StatusServiceInterface, logger logger.Logger) *StatusHandler {
+// ConfirmBookingRequest represents the request body for confirming a booking
+type ConfirmBookingRequest struct {
+	Note string `json:"note"`
+}
+
+// RejectBookingRequest represents the request body for rejecting a booking
+type RejectBookingRequest struct {
+	Reason string `json:"reason" binding:"required"`
+}
+
+// CompleteBookingRequest represents the request body for completing a booking
+type CompleteBookingRequest struct {
+	Summary string `json:"summary"`
+}
+
+type StatusHandler struct {
+	statusService service.StatusServiceInterface
+	logger        logger.LoggerInterface
+}
+
+func NewStatusHandler(statusService service.StatusServiceInterface, logger logger.LoggerInterface) *StatusHandler {
 	return &StatusHandler{
 		statusService: statusService,
 		logger:        logger,
@@ -26,7 +48,7 @@ func NewStatusHandler(statusService service.StatusServiceInterface, logger logge
 // UpdateBookingStatus updates the status of a booking
 func (h *StatusHandler) UpdateBookingStatus(c *gin.Context) {
 	bookingIDStr := c.Param("id")
-	bookingID, err := strconv.ParseUint(bookingIDStr, 10, 32)
+	bookingID, err := uuid.Parse(bookingIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid booking ID"))
 		return
@@ -35,23 +57,23 @@ func (h *StatusHandler) UpdateBookingStatus(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	userRole, _ := c.Get("user_role")
 
-	var req model.UpdateStatusRequest
+	var req UpdateStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid request format"))
 		return
 	}
 
 	// Validate status
-	if !model.IsValidBookingStatus(req.Status) {
+	if !isValidBookingStatus(req.Status) {
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid booking status"))
 		return
 	}
 
 	// Update status
 	err = h.statusService.UpdateBookingStatus(
-		uint(bookingID),
+		bookingID,
 		req.Status,
-		userID.(uint),
+		userID.(uuid.UUID),
 		userRole.(string),
 		req.Note,
 	)
@@ -76,13 +98,13 @@ func (h *StatusHandler) UpdateBookingStatus(c *gin.Context) {
 // GetBookingStatus retrieves the current status of a booking
 func (h *StatusHandler) GetBookingStatus(c *gin.Context) {
 	bookingIDStr := c.Param("id")
-	bookingID, err := strconv.ParseUint(bookingIDStr, 10, 32)
+	bookingID, err := uuid.Parse(bookingIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid booking ID"))
 		return
 	}
 
-	status, err := h.statusService.GetBookingStatus(uint(bookingID))
+	status, err := h.statusService.GetBookingStatus(bookingID)
 	if err != nil {
 		if err.Error() == "booking not found" {
 			c.JSON(http.StatusNotFound, utils.ErrorResponse("Booking not found"))
@@ -101,7 +123,7 @@ func (h *StatusHandler) GetBookingStatus(c *gin.Context) {
 // GetStatusHistory retrieves the status history of a booking
 func (h *StatusHandler) GetStatusHistory(c *gin.Context) {
 	bookingIDStr := c.Param("id")
-	bookingID, err := strconv.ParseUint(bookingIDStr, 10, 32)
+	bookingID, err := uuid.Parse(bookingIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid booking ID"))
 		return
@@ -110,7 +132,7 @@ func (h *StatusHandler) GetStatusHistory(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	userRole, _ := c.Get("user_role")
 
-	history, err := h.statusService.GetStatusHistory(uint(bookingID), userID.(uint), userRole.(string))
+	history, err := h.statusService.GetStatusHistory(bookingID, userID.(uuid.UUID), userRole.(string))
 	if err != nil {
 		switch err.Error() {
 		case "booking not found":
@@ -130,7 +152,7 @@ func (h *StatusHandler) GetStatusHistory(c *gin.Context) {
 // ConfirmBooking confirms a booking (expert only)
 func (h *StatusHandler) ConfirmBooking(c *gin.Context) {
 	bookingIDStr := c.Param("id")
-	bookingID, err := strconv.ParseUint(bookingIDStr, 10, 32)
+	bookingID, err := uuid.Parse(bookingIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid booking ID"))
 		return
@@ -139,16 +161,16 @@ func (h *StatusHandler) ConfirmBooking(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	userRole, _ := c.Get("user_role")
 
-	var req model.ConfirmBookingRequest
+	var req ConfirmBookingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		// Note is optional, so we can proceed without it
 		req.Note = ""
 	}
 
 	err = h.statusService.UpdateBookingStatus(
-		uint(bookingID),
+		bookingID,
 		model.BookingStatusConfirmed,
-		userID.(uint),
+		userID.(uuid.UUID),
 		userRole.(string),
 		req.Note,
 	)
@@ -173,7 +195,7 @@ func (h *StatusHandler) ConfirmBooking(c *gin.Context) {
 // RejectBooking rejects a booking (expert only)
 func (h *StatusHandler) RejectBooking(c *gin.Context) {
 	bookingIDStr := c.Param("id")
-	bookingID, err := strconv.ParseUint(bookingIDStr, 10, 32)
+	bookingID, err := uuid.Parse(bookingIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid booking ID"))
 		return
@@ -182,7 +204,7 @@ func (h *StatusHandler) RejectBooking(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	userRole, _ := c.Get("user_role")
 
-	var req model.RejectBookingRequest
+	var req RejectBookingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Rejection reason is required"))
 		return
@@ -194,9 +216,9 @@ func (h *StatusHandler) RejectBooking(c *gin.Context) {
 	}
 
 	err = h.statusService.UpdateBookingStatus(
-		uint(bookingID),
+		bookingID,
 		model.BookingStatusRejected,
-		userID.(uint),
+		userID.(uuid.UUID),
 		userRole.(string),
 		req.Reason,
 	)
@@ -221,7 +243,7 @@ func (h *StatusHandler) RejectBooking(c *gin.Context) {
 // CompleteBooking marks a booking as completed (expert only)
 func (h *StatusHandler) CompleteBooking(c *gin.Context) {
 	bookingIDStr := c.Param("id")
-	bookingID, err := strconv.ParseUint(bookingIDStr, 10, 32)
+	bookingID, err := uuid.Parse(bookingIDStr)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid booking ID"))
 		return
@@ -230,16 +252,16 @@ func (h *StatusHandler) CompleteBooking(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	userRole, _ := c.Get("user_role")
 
-	var req model.CompleteBookingRequest
+	var req CompleteBookingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		// Summary is optional
 		req.Summary = ""
 	}
 
 	err = h.statusService.UpdateBookingStatus(
-		uint(bookingID),
+		bookingID,
 		model.BookingStatusCompleted,
-		userID.(uint),
+		userID.(uuid.UUID),
 		userRole.(string),
 		req.Summary,
 	)
@@ -259,4 +281,23 @@ func (h *StatusHandler) CompleteBooking(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, utils.SuccessResponse("Booking completed successfully", nil))
+}
+
+// isValidBookingStatus checks if the given status is valid
+func isValidBookingStatus(status model.BookingStatus) bool {
+	validStatuses := []model.BookingStatus{
+		model.BookingStatusPending,
+		model.BookingStatusConfirmed,
+		model.BookingStatusRejected,
+		model.BookingStatusCancelled,
+		model.BookingStatusCompleted,
+	}
+
+	for _, validStatus := range validStatuses {
+		if status == validStatus {
+			return true
+		}
+	}
+
+	return false
 }

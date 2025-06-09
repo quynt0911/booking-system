@@ -31,16 +31,16 @@ func (s *userService) Register(req model.RegisterRequest) (*model.User, error) {
 		return nil, err
 	}
 	user := &model.User{
-		ID:       uuid.NewString(),
-		Email:    req.Email,
-		Password: hashed,
-		FullName: req.FullName,
-		Role:     model.UserRole(req.Role),
+		ID:           uuid.NewString(),
+		Email:        req.Email,
+		PasswordHash: hashed,
+		FullName:     req.FullName,
+		Role:         model.UserRole(req.Role),
 	}
 	if err := s.repo.Create(user); err != nil {
 		return nil, err
 	}
-	user.Password = ""
+	user.PasswordHash = ""
 	return user, nil
 }
 
@@ -49,10 +49,10 @@ func (s *userService) Login(req model.LoginRequest) (*model.User, error) {
 	if err != nil {
 		return nil, errors.New("invalid email or password")
 	}
-	if !utils.CheckPasswordHash(req.Password, user.Password) {
+	if !utils.CheckPasswordHash(req.Password, user.PasswordHash) {
 		return nil, errors.New("invalid email or password")
 	}
-	user.Password = ""
+	user.PasswordHash = ""
 	return user, nil
 }
 
@@ -61,7 +61,7 @@ func (s *userService) GetProfile(userID string) (*model.User, error) {
 	if err != nil {
 		return nil, err
 	}
-	user.Password = ""
+	user.PasswordHash = ""
 	return user, nil
 }
 
@@ -74,7 +74,7 @@ func (s *userService) UpdateProfile(userID string, req model.UpdateProfileReques
 	if err := s.repo.Update(user); err != nil {
 		return nil, err
 	}
-	user.Password = ""
+	user.PasswordHash = ""
 	return user, nil
 }
 
