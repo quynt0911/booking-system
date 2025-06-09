@@ -2,7 +2,7 @@ package repository
 
 import (
 	"database/sql"
-	"expert-service/internal2/model"
+	"expert-service/internal/model"
 )
 
 type ExpertRepository interface {

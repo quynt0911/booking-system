@@ -25,3 +25,10 @@ type CheckAvailabilityRequest struct {
     Date     string `json:"date" binding:"required"`
     Time     string `json:"time" binding:"required"`
 }
+type UpdateExpertRequest struct {
+    Name       *string `json:"name,omitempty"`
+    Expertise  *string `json:"expertise,omitempty"`
+    Bio        *string `json:"bio,omitempty"`
+    // Add other fields as needed
+}
+
