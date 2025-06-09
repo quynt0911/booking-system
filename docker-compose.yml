@@ -11,9 +11,14 @@ services:
       - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d
     networks:
       - consultation_network
+    # Thêm health check để đảm bảo DB sẵn sàng
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d consultation_booking"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   redis:
     image: redis:7-alpine
@@ -42,14 +47,61 @@ services:
       context: ./services/user-service
     container_name: user-service
     environment:
-      - USER_SERVICE_DSN=host=postgres user=postgres password=password123 dbname=user_service_db port=5432 sslmode=disable
+      # Sửa để kết nối đúng với postgres container
+      - USER_SERVICE_DSN=host=postgres user=postgres password=password123 dbname=consultation_booking port=5432 sslmode=disable
       - JWT_SECRET=your-secret
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     ports:
       - "8080:8080"
     networks:
       - consultation_network
+
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+    container_name: api-gateway
+    environment:
+      - USER_SERVICE_URL=http://user-service:8080
+      - JWT_SECRET=your-secret
+    depends_on:
+      - user-service
+    ports:
+      - "8081:8081"
+    networks:
+      - consultation_network
+
+  directus:
+    image: directus/directus:11.8.0
+    ports:
+      - "8055:8055"
+    environment:
+      KEY: "a-very-secret-key"
+      SECRET: "another-secret-key"
+      ADMIN_EMAIL: "admin@example.com"
+      ADMIN_PASSWORD: "admin123"
+      
+      # Cấu hình database - sử dụng tên service thay vì host.docker.internal
+      DB_CLIENT: "pg"
+      DB_HOST: "postgres"
+      DB_PORT: "5432"
+      DB_DATABASE: "consultation_booking"
+      DB_USER: "postgres"
+      DB_PASSWORD: "password123"
+      
+      # Thêm một số cấu hình bổ sung
+      PUBLIC_URL: "http://localhost:8055"
+      CORS_ENABLED: "true"
+      CORS_ORIGIN: "true"
+      
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - consultation_network
+    # Thêm restart policy
+    restart: unless-stopped
 
 volumes:
   postgres_data:

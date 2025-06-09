@@ -24,7 +24,7 @@ func NewJWTService(secret string, expiry int, refreshTokenExpiry int) JWTService
 
 func (j *jwtService) GenerateTokens(user *model.User) (string, string, error) {
 	claims := jwt.RegisteredClaims{
-		Subject:   user.ID,
+		Subject:   user.ID.String(),
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(j.expiry) * time.Second)),
 	}
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -33,7 +33,7 @@ func (j *jwtService) GenerateTokens(user *model.User) (string, string, error) {
 		return "", "", err
 	}
 	refreshClaims := jwt.RegisteredClaims{
-		Subject:   user.ID,
+		Subject:   user.ID.String(),
 		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(j.refreshTokenExpiry) * time.Second)),
 	}
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
