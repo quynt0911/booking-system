@@ -22,8 +22,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect database: %v", err)
 	}
-	// Auto migrate
-	db.AutoMigrate(&model.User{})
+
+	// Auto migrate the schema
+	if err := db.AutoMigrate(&model.User{}); err != nil {
+		log.Fatalf("failed to migrate database: %v", err)
+	}
 
 	repo := repository.NewUserRepository(db)
 	userService := service.NewUserService(repo)
