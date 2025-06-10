@@ -26,8 +26,10 @@ func SetupRoutes(cfg *config.Config) http.Handler {
 	// User service routes
 	secured.PathPrefix("/users").Handler(middleware.NewReverseProxy(cfg.UserURL))
 
-	// Other service routes
+	// Booking service routes
 	secured.PathPrefix("/bookings").Handler(middleware.NewReverseProxy(cfg.BookingURL))
+
+	// Other service routes
 	secured.PathPrefix("/experts").Handler(middleware.NewReverseProxy(cfg.ExpertURL))
 	secured.PathPrefix("/notifications").Handler(middleware.NewReverseProxy(cfg.NotifyURL))
 

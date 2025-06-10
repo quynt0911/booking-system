@@ -58,15 +58,36 @@ services:
     networks:
       - consultation_network
 
+  booking-service:
+    build:
+      context: ./services/booking-service
+    container_name: booking-service
+    environment:
+      - BOOKING_SERVICE_DSN=host=postgres user=postgres password=password123 dbname=consultation_booking port=5432 sslmode=disable
+      - JWT_SECRET=your-secret
+      - REDIS_URL=redis:6379
+      - PORT=8082
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8082:8082"
+    networks:
+      - consultation_network
+
   api-gateway:
     build:
       context: ./services/api-gateway
     container_name: api-gateway
     environment:
       - USER_SERVICE_URL=http://user-service:8080
+      - BOOKING_SERVICE_URL=http://booking-service:8082
       - JWT_SECRET=your-secret
     depends_on:
       - user-service
+      - booking-service
     ports:
       - "8081:8081"
     networks:

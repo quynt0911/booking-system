@@ -17,11 +17,7 @@ func NewReverseProxy(target string) http.HandlerFunc {
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
-		if strings.HasPrefix(req.URL.Path, "/users") {
-			req.URL.Path = singleJoiningSlash(targetURL.Path, strings.TrimPrefix(req.URL.Path, "/users"))
-		} else {
-			req.URL.Path = singleJoiningSlash(targetURL.Path, req.URL.Path)
-		}
+		req.URL.Path = singleJoiningSlash(targetURL.Path, req.URL.Path)
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {

@@ -17,9 +17,9 @@ type Config struct {
 func NewConfig() *Config {
 	return &Config{
 		UserURL:      getEnv("USER_SERVICE_URL", "http://localhost:8080"),
-		BookingURL:   getEnv("BOOKING_SERVICE_URL", "http://localhost:8081"),
-		ExpertURL:    getEnv("EXPERT_SERVICE_URL", "http://localhost:8082"),
-		NotifyURL:    getEnv("NOTIFY_SERVICE_URL", "http://localhost:8083"),
+		BookingURL:   getEnv("BOOKING_SERVICE_URL", "http://localhost:8082"),
+		ExpertURL:    getEnv("EXPERT_SERVICE_URL", "http://localhost:8083"),
+		NotifyURL:    getEnv("NOTIFY_SERVICE_URL", "http://localhost:8084"),
 		JWTSecret:    getEnv("JWT_SECRET", "your-secret-key"),
 		RateLimit:    100,
 		RateDuration: 60,
