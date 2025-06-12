@@ -84,12 +84,33 @@ services:
     environment:
       - USER_SERVICE_URL=http://user-service:8080
       - BOOKING_SERVICE_URL=http://booking-service:8082
+      - EXPERT_SERVICE_URL=http://expert-service:8083
       - JWT_SECRET=your-secret
     depends_on:
       - user-service
       - booking-service
+      - expert-service
     ports:
       - "8081:8081"
+    networks:
+      - consultation_network
+
+  expert-service:
+    build:
+      context: ./services/expert-service
+    container_name: expert-service
+    environment:
+      - EXPERT_SERVICE_DSN=host=postgres user=postgres password=password123 dbname=consultation_booking port=5432 sslmode=disable
+      - REDIS_URL=redis:6379
+      - REDIS_PASSWORD=redis_password_123
+      - PORT=8083
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    ports:
+      - "8083:8083"
     networks:
       - consultation_network
 

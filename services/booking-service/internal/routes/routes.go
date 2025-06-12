@@ -9,19 +9,19 @@ import (
 // SetupRoutes thiết lập các route cho booking service
 func SetupRoutes(router *gin.Engine, bookingHandler *handler.BookingHandler, statusHandler *handler.StatusHandler, historyHandler *handler.HistoryHandler) {
 	// Booking routes
-	router.POST("/", bookingHandler.CreateBooking)
-	router.GET("/:id", bookingHandler.GetBooking)
-	router.PUT("/:id", bookingHandler.UpdateBooking)
-	router.DELETE("/:id", bookingHandler.CancelBooking)
-	router.GET("/user", bookingHandler.GetUserBookings)     // Adjusted path
-	router.GET("/expert", bookingHandler.GetExpertBookings) // Adjusted path
+	router.POST("/CreateBooking", bookingHandler.CreateBooking)
+	router.GET("/GetBooking/:id", bookingHandler.GetBooking)
+	router.PUT("/UpdateBooking/:id", bookingHandler.UpdateBooking)
+	router.DELETE("/DeleteBooking/:id", bookingHandler.CancelBooking)
+	router.GET("/GetUserBookings", bookingHandler.GetUserBookings)
+	router.GET("/GetExpertBookings", bookingHandler.GetExpertBookings)
 
 	// Status routes
-	router.PUT("/:id/status", statusHandler.UpdateBookingStatus)
-	router.GET("/:id/status", statusHandler.GetBookingStatus)
-	router.GET("/:id/status/history", statusHandler.GetStatusHistory)
+	router.PUT("/UpdateBookingStatus/:id", statusHandler.UpdateBookingStatus)
+	router.GET("/GetBookingStatus/:id", statusHandler.GetBookingStatus)
+	router.GET("/GetStatusHistory/:id", statusHandler.GetStatusHistory)
 
 	// History routes
-	router.GET("/history/user", historyHandler.GetBookingHistory)
-	router.GET("/history/expert", historyHandler.GetExpertHistory)
+	router.GET("/GetBookingHistoryByUser", historyHandler.GetBookingHistory)
+	router.GET("/GetBookingHistoryByExpert", historyHandler.GetExpertHistory)
 }
