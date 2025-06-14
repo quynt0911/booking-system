@@ -1,5 +1,15 @@
-FROM golang:1.21-alpine
+FROM golang:1.24.2
+
 WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY . .
-RUN go build -o worker-service ./cmd/main.go
+
+# Build the application
+RUN go build -o expert-service ./cmd/main.go
+
+EXPOSE 8085
+
 CMD ["./worker-service"]

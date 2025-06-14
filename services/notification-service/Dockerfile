@@ -1,8 +1,15 @@
-FROM golang:1.21-alpine
+FROM golang:1.24.2
 
 WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY . .
 
-RUN go build -o notification-service ./cmd/main.go
+# Build the application
+RUN go build -o expert-service ./cmd/main.go
+
+EXPOSE 8084
 
 CMD ["./notification-service"]
