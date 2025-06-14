@@ -17,7 +17,7 @@ func NewReverseProxy(target string) http.HandlerFunc {
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
-		req.URL.Path = singleJoiningSlash(targetURL.Path, strings.TrimPrefix(req.URL.Path, "/api"))
+		req.URL.Path = singleJoiningSlash(targetURL.Path, req.URL.Path)
 	}
 
 	return func(w http.ResponseWriter, r *http.Request) {

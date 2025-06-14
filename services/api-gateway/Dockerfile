@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine
+FROM golang:1.24.2
 
 WORKDIR /app
 
@@ -10,6 +10,6 @@ COPY . .
 
 RUN go build -o main ./cmd/main.go
 
-EXPOSE 8080
+EXPOSE 8081
 
 CMD ["/app/main"]

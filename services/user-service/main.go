@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 	"services/user-service/handler"
-	"services/user-service/model"
 	"services/user-service/repository"
 	"services/user-service/service"
 
@@ -22,8 +21,8 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect database: %v", err)
 	}
-	// Auto migrate
-	db.AutoMigrate(&model.User{})
+	// Remove auto-migrate since we're using our own schema
+	// db.AutoMigrate(&model.User{})
 
 	repo := repository.NewUserRepository(db)
 	userService := service.NewUserService(repo)

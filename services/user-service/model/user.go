@@ -1,5 +1,11 @@
 package model
 
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
 type UserRole string
 
 const (
@@ -9,17 +15,26 @@ const (
 )
 
 type User struct {
-	ID       string   `json:"id" gorm:"primaryKey"`
-	Email    string   `json:"email" gorm:"unique;not null"`
-	Password string   `json:"-"`
-	FullName string   `json:"full_name"`
-	Role     UserRole `json:"role"`
+	ID            uuid.UUID `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	Email         string    `json:"email" gorm:"unique;not null"`
+	PasswordHash  string    `json:"-" gorm:"column:password_hash;not null"`
+	FullName      string    `json:"fullname" gorm:"column:fullname;not null"`
+	Phone         string    `json:"phone"`
+	Image         string    `json:"image"`
+	Gender        string    `json:"gender"`
+	Description   string    `json:"description"`
+	Role          UserRole  `json:"role" gorm:"default:'user'"`
+	EmailVerified bool      `json:"email_verified" gorm:"default:false"`
+	CreatedAt     time.Time `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
+	UpdatedAt     time.Time `json:"updated_at" gorm:"default:CURRENT_TIMESTAMP"`
 }
 
 type RegisterRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=6"`
-	FullName string `json:"full_name" binding:"required"`
+	FullName string `json:"fullname" binding:"required"`
+	Phone    string `json:"phone"`
+	Gender   string `json:"gender"`
 	Role     string `json:"role" binding:"required,oneof=admin expert user"`
 }
 
@@ -29,5 +44,9 @@ type LoginRequest struct {
 }
 
 type UpdateProfileRequest struct {
-	FullName string `json:"full_name" binding:"required"`
+	FullName    string `json:"fullname"`
+	Phone       string `json:"phone"`
+	Image       string `json:"image"`
+	Gender      string `json:"gender"`
+	Description string `json:"description"`
 }

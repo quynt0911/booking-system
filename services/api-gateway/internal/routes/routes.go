@@ -14,14 +14,22 @@ func SetupRoutes(cfg *config.Config) http.Handler {
 	router := mux.NewRouter()
 
 	// Public routes
-	router.HandleFunc("/auth/login", handler.AuthHandler).Methods("POST")
+	router.HandleFunc("/auth/register", handler.HandleAuth).Methods("POST")
+	router.HandleFunc("/auth/login", handler.HandleAuth).Methods("POST")
+	router.HandleFunc("/auth/refresh", handler.HandleAuth).Methods("POST")
 
 	// Secured routes group
 	secured := router.PathPrefix("/").Subrouter()
 	secured.Use(middleware.RateLimitMiddleware)
 	secured.Use(middleware.AuthMiddleware)
 
+	// User service routes
+	secured.PathPrefix("/users").Handler(middleware.NewReverseProxy(cfg.UserURL))
+
+	// Booking service routes
 	secured.PathPrefix("/bookings").Handler(middleware.NewReverseProxy(cfg.BookingURL))
+
+	// Other service routes
 	secured.PathPrefix("/experts").Handler(middleware.NewReverseProxy(cfg.ExpertURL))
 	secured.PathPrefix("/notifications").Handler(middleware.NewReverseProxy(cfg.NotifyURL))
 

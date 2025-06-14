@@ -5,24 +5,30 @@ import (
 )
 
 type Config struct {
-	Port        string
-	BookingURL  string
-	ExpertURL   string
-	NotifyURL   string
+	UserURL      string
+	BookingURL   string
+	ExpertURL    string
+	NotifyURL    string
+	JWTSecret    string
+	RateLimit    int
+	RateDuration int
 }
 
-func LoadConfig() *Config {
+func NewConfig() *Config {
 	return &Config{
-		Port:       getEnv("PORT", "8080"),
-		BookingURL: getEnv("BOOKING_URL", "http://localhost:9001"),
-		ExpertURL:  getEnv("EXPERT_URL", "http://localhost:9002"),
-		NotifyURL:  getEnv("NOTIFY_URL", "http://localhost:9003"),
+		UserURL:      getEnv("USER_SERVICE_URL", "http://localhost:8080"),
+		BookingURL:   getEnv("BOOKING_SERVICE_URL", "http://localhost:8082"),
+		ExpertURL:    getEnv("EXPERT_SERVICE_URL", "http://localhost:8083"),
+		NotifyURL:    getEnv("NOTIFY_SERVICE_URL", "http://localhost:8084"),
+		JWTSecret:    getEnv("JWT_SECRET", "your-secret-key"),
+		RateLimit:    100,
+		RateDuration: 60,
 	}
 }
 
-func getEnv(key, fallback string) string {
+func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
 	}
-	return fallback
+	return defaultValue
 }
