@@ -1,9 +1,8 @@
 package routes
 
 import (
-	"notification-service/internal/handler"
-
 	"github.com/gin-gonic/gin"
+	"github.com/your-org/booking-system/services/notification-service/internal/handler"
 )
 
 func SetupRoutes(
