@@ -146,6 +146,55 @@ services:
     # Thêm restart policy
     restart: unless-stopped
 
+  notification-service:
+    build:
+      context: ./services/notification-service
+    container_name: notification-service
+    environment:
+      - REDIS_URL=redis://:redis_password_123@redis:6379/0
+      - PORT=8084
+      - JWT_SECRET=your-secret
+      - USER_SERVICE_URL=http://user-service:8080
+      - BOOKING_SERVICE_URL=http://booking-service:8082
+      - EXPERT_SERVICE_URL=http://expert-service:8083
+    depends_on:
+      redis:
+        condition: service_started
+      user-service:
+        condition: service_started
+      booking-service:
+        condition: service_started
+      expert-service:
+        condition: service_started
+    ports:
+      - "8084:8084"
+    networks:
+      - consultation_network
+
+  worker-service:
+    build:
+      context: ./services/worker-service
+    container_name: worker-service
+    environment:
+      - REDIS_URL=redis://:redis_password_123@redis:6379/0
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8084
+      - BOOKING_SERVICE_URL=http://booking-service:8082
+      - EXPERT_SERVICE_URL=http://expert-service:8083
+      - PORT=8085
+    depends_on:
+      redis:
+        condition: service_started
+      notification-service:
+        condition: service_started
+      booking-service:
+        condition: service_started
+      expert-service:
+        condition: service_started
+    ports:
+      - "8085:8085"
+    networks:
+      - consultation_network
+
 volumes:
   postgres_data:
   redis_data:
