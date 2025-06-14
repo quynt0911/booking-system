@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"expert-service/internal/model"
 	"expert-service/internal/service"
 	"net/http"
 	"strconv"
@@ -24,10 +25,10 @@ func NewScheduleHandler(scheduleService service.ScheduleService) *ScheduleHandle
 
 // Schedule represents a scheduled appointment
 type Schedule struct {
-	ID             int       `json:"id"`
-	ExpertID       int       `json:"expert_id"`
-	UserID         int       `json:"user_id"`
-	AvailabilityID int       `json:"availability_id"`
+	ID             string    `json:"id"`
+	ExpertID       string    `json:"expert_id"`
+	UserID         string    `json:"user_id"`
+	AvailabilityID string    `json:"availability_id"`
 	Date           string    `json:"date"`
 	StartTime      string    `json:"start_time"`
 	EndTime        string    `json:"end_time"`
@@ -49,14 +50,7 @@ type ScheduleWithDetails struct {
 }
 
 // CreateScheduleRequest represents request body for creating schedule
-type CreateScheduleRequest struct {
-	ExpertID       int    `json:"expert_id" validate:"required"`
-	UserID         int    `json:"user_id" validate:"required"`
-	AvailabilityID int    `json:"availability_id" validate:"required"`
-	Title          string `json:"title" validate:"required"`
-	Description    string `json:"description,omitempty"`
-	MeetingLink    string `json:"meeting_link,omitempty"`
-}
+// THIS STRUCT IS REMOVED, USING model.CreateScheduleRequest INSTEAD
 
 // UpdateScheduleRequest represents request body for updating schedule
 type UpdateScheduleRequest struct {
@@ -77,33 +71,16 @@ const (
 
 // CreateSchedule creates a new schedule/appointment
 func (h *ScheduleHandler) CreateSchedule(c *gin.Context) {
-	var req CreateScheduleRequest
+	var req model.CreateScheduleRequest // Using the model's struct
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "details": err.Error()})
 		return
 	}
 
-	// TODO: Add business logic to:
-	// 1. Check if availability exists and is not booked
-	// 2. Check if expert exists
-	// 3. Check if user exists
-	// 4. Create schedule and mark availability as booked
-
-	// Example response
-	schedule := Schedule{
-		ID:             1,
-		ExpertID:       req.ExpertID,
-		UserID:         req.UserID,
-		AvailabilityID: req.AvailabilityID,
-		Date:           "2024-12-10",
-		StartTime:      "09:00",
-		EndTime:        "10:00",
-		Status:         StatusPending,
-		Title:          req.Title,
-		Description:    req.Description,
-		MeetingLink:    req.MeetingLink,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+	schedule, err := h.scheduleService.CreateSchedule(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create schedule", "details": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
@@ -115,82 +92,60 @@ func (h *ScheduleHandler) CreateSchedule(c *gin.Context) {
 
 // GetSchedules retrieves all schedules with optional filters
 func (h *ScheduleHandler) GetSchedules(c *gin.Context) {
-	expertID := c.Query("expert_id")
-	userID := c.Query("user_id")
-	status := c.Query("status")
-	date := c.Query("date")
-	limit := c.Query("limit")
-	offset := c.Query("offset")
+	var req model.GetSchedulesRequest
+	req.ExpertID = c.Query("expert_id")
+	req.UserID = c.Query("user_id")
+	req.Status = c.Query("status")
+	req.Date = c.Query("date")
 
-	// TODO: Add business logic to fetch schedules with filters
-	// Example response
-	schedules := []ScheduleWithDetails{
-		{
-			Schedule: Schedule{
-				ID:             1,
-				ExpertID:       1,
-				UserID:         1,
-				AvailabilityID: 1,
-				Date:           "2024-12-10",
-				StartTime:      "09:00",
-				EndTime:        "10:00",
-				Status:         StatusConfirmed,
-				Title:          "Consultation Session",
-				Description:    "Initial consultation",
-				MeetingLink:    "https://meet.google.com/abc-def-ghi",
-				CreatedAt:      time.Now(),
-				UpdatedAt:      time.Now(),
-			},
-			ExpertName: "Dr. John Smith",
-			UserName:   "Jane Doe",
-			UserEmail:  "jane@example.com",
-		},
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			req.Limit = limit
+		}
+	}
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			req.Offset = offset
+		}
+	}
+
+	schedules, err := h.scheduleService.GetSchedules(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve schedules", "details": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data":    schedules,
 		"filters": gin.H{
-			"expert_id": expertID,
-			"user_id":   userID,
-			"status":    status,
-			"date":      date,
-			"limit":     limit,
-			"offset":    offset,
+			"expert_id": req.ExpertID,
+			"user_id":   req.UserID,
+			"status":    req.Status,
+			"date":      req.Date,
+			"limit":     req.Limit,
+			"offset":    req.Offset,
 		},
 	})
 }
 
 // GetScheduleByID retrieves schedule by ID
 func (h *ScheduleHandler) GetScheduleByID(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID"})
+	id := c.Param("id")                       // ID is already a string (UUID)
+	if _, err := uuid.Parse(id); err != nil { // Validate if it's a valid UUID
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID format"})
 		return
 	}
 
-	// TODO: Add business logic to fetch schedule by ID with details
-	// Example response
-	schedule := ScheduleWithDetails{
-		Schedule: Schedule{
-			ID:             id,
-			ExpertID:       1,
-			UserID:         1,
-			AvailabilityID: 1,
-			Date:           "2024-12-10",
-			StartTime:      "09:00",
-			EndTime:        "10:00",
-			Status:         StatusConfirmed,
-			Title:          "Consultation Session",
-			Description:    "Initial consultation",
-			MeetingLink:    "https://meet.google.com/abc-def-ghi",
-			Notes:          "Patient is preparing for surgery",
-			CreatedAt:      time.Now(),
-			UpdatedAt:      time.Now(),
-		},
-		ExpertName: "Dr. John Smith",
-		UserName:   "Jane Doe",
-		UserEmail:  "jane@example.com",
+	schedule, err := h.scheduleService.GetScheduleByID(uuid.MustParse(id))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve schedule", "details": err.Error()})
+		return
+	}
+
+	if schedule == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Schedule not found"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -201,148 +156,119 @@ func (h *ScheduleHandler) GetScheduleByID(c *gin.Context) {
 
 // UpdateSchedule updates existing schedule
 func (h *ScheduleHandler) UpdateSchedule(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID"})
+	id := c.Param("id")                       // ID is already a string (UUID)
+	if _, err := uuid.Parse(id); err != nil { // Validate if it's a valid UUID
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID format"})
 		return
 	}
 
-	var req UpdateScheduleRequest
+	var req model.UpdateScheduleRequest // Use the model's struct
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body", "details": err.Error()})
 		return
 	}
 
-	// Validate status if provided
-	if req.Status != "" && !isValidStatus(req.Status) {
+	if req.Status != nil && !isValidStatus(*req.Status) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid status. Use: pending, confirmed, cancelled, completed"})
 		return
 	}
 
-	// TODO: Add business logic to update schedule
-	// Handle status changes (e.g., if cancelled, free up availability)
-
-	// Example response
-	schedule := Schedule{
-		ID:             id,
-		ExpertID:       1,
-		UserID:         1,
-		AvailabilityID: 1,
-		Date:           "2024-12-10",
-		StartTime:      "09:00",
-		EndTime:        "10:00",
-		Status:         getStringValueOrDefault(req.Status, StatusConfirmed),
-		Title:          getStringValueOrDefault(req.Title, "Consultation Session"),
-		Description:    req.Description,
-		MeetingLink:    req.MeetingLink,
-		Notes:          req.Notes,
-		CreatedAt:      time.Now().Add(-24 * time.Hour),
-		UpdatedAt:      time.Now(),
+	if err := h.scheduleService.UpdateSchedule(uuid.MustParse(id), &req); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update schedule", "details": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    schedule,
 		"message": "Schedule updated successfully",
 	})
 }
 
 // CancelSchedule cancels a schedule
 func (h *ScheduleHandler) CancelSchedule(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID"})
+	id := c.Param("id")
+	if _, err := uuid.Parse(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID format"})
 		return
 	}
 
-	// TODO: Add business logic to:
-	// 1. Update schedule status to cancelled
-	// 2. Free up the availability slot
-	// 3. Send notification to both expert and user
+	if err := h.scheduleService.CancelSchedule(uuid.MustParse(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel schedule", "details": err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Schedule cancelled successfully",
-		"id":      id,
 	})
 }
 
 // ConfirmSchedule confirms a pending schedule
 func (h *ScheduleHandler) ConfirmSchedule(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID"})
+	id := c.Param("id")
+	if _, err := uuid.Parse(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID format"})
 		return
 	}
 
-	// TODO: Add business logic to:
-	// 1. Update schedule status to confirmed
-	// 2. Send confirmation notification
-	// 3. Generate meeting link if not provided
+	if err := h.scheduleService.ConfirmSchedule(uuid.MustParse(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to confirm schedule", "details": err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Schedule confirmed successfully",
-		"id":      id,
 	})
 }
 
 // CompleteSchedule marks a schedule as completed
 func (h *ScheduleHandler) CompleteSchedule(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID"})
+	id := c.Param("id")
+	if _, err := uuid.Parse(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID format"})
 		return
 	}
 
-	// TODO: Add business logic to:
-	// 1. Update schedule status to completed
-	// 2. Allow expert to add notes/summary
-	// 3. Trigger billing/payment if applicable
+	if err := h.scheduleService.CompleteSchedule(uuid.MustParse(id)); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete schedule", "details": err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Schedule marked as completed",
-		"id":      id,
 	})
 }
 
 // GetExpertSchedules retrieves all schedules for a specific expert
 func (h *ScheduleHandler) GetExpertSchedules(c *gin.Context) {
-	expertID, err := strconv.Atoi(c.Param("expert_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid expert ID"})
+	expertID := c.Param("expert_id")
+	if _, err := uuid.Parse(expertID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid expert ID format"})
 		return
 	}
 
-	// Parse query parameters
-	status := c.Query("status")
-	date := c.Query("date")
-	limit := c.Query("limit")
-	offset := c.Query("offset")
+	var req model.GetSchedulesRequest
+	req.ExpertID = expertID
+	req.Status = c.Query("status")
+	req.Date = c.Query("date")
 
-	// TODO: Add business logic to fetch expert's schedules
-	// Example response
-	schedules := []ScheduleWithDetails{
-		{
-			Schedule: Schedule{
-				ID:             1,
-				ExpertID:       expertID,
-				UserID:         1,
-				AvailabilityID: 1,
-				Date:           "2024-12-10",
-				StartTime:      "09:00",
-				EndTime:        "10:00",
-				Status:         StatusConfirmed,
-				Title:          "Consultation Session",
-				Description:    "Initial consultation",
-				MeetingLink:    "https://meet.google.com/abc-def-ghi",
-				CreatedAt:      time.Now(),
-				UpdatedAt:      time.Now(),
-			},
-			UserName:  "Jane Doe",
-			UserEmail: "jane@example.com",
-		},
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			req.Limit = limit
+		}
+	}
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			req.Offset = offset
+		}
+	}
+
+	schedules, err := h.scheduleService.GetSchedules(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve expert schedules", "details": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -350,49 +276,42 @@ func (h *ScheduleHandler) GetExpertSchedules(c *gin.Context) {
 		"data":      schedules,
 		"expert_id": expertID,
 		"filters": gin.H{
-			"status": status,
-			"date":   date,
-			"limit":  limit,
-			"offset": offset,
+			"status": req.Status,
+			"date":   req.Date,
+			"limit":  req.Limit,
+			"offset": req.Offset,
 		},
 	})
 }
 
 // GetUserSchedules retrieves all schedules for a specific user
 func (h *ScheduleHandler) GetUserSchedules(c *gin.Context) {
-	userID, err := strconv.Atoi(c.Param("user_id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+	userID := c.Param("user_id")
+	if _, err := uuid.Parse(userID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID format"})
 		return
 	}
 
-	// Parse query parameters
-	status := c.Query("status")
-	date := c.Query("date")
-	limit := c.Query("limit")
-	offset := c.Query("offset")
+	var req model.GetSchedulesRequest
+	req.UserID = userID
+	req.Status = c.Query("status")
+	req.Date = c.Query("date")
 
-	// TODO: Add business logic to fetch user's schedules
-	// Example response
-	schedules := []ScheduleWithDetails{
-		{
-			Schedule: Schedule{
-				ID:             1,
-				ExpertID:       1,
-				UserID:         userID,
-				AvailabilityID: 1,
-				Date:           "2024-12-10",
-				StartTime:      "09:00",
-				EndTime:        "10:00",
-				Status:         StatusConfirmed,
-				Title:          "Consultation Session",
-				Description:    "Initial consultation",
-				MeetingLink:    "https://meet.google.com/abc-def-ghi",
-				CreatedAt:      time.Now(),
-				UpdatedAt:      time.Now(),
-			},
-			ExpertName: "Dr. John Smith",
-		},
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if limit, err := strconv.Atoi(limitStr); err == nil {
+			req.Limit = limit
+		}
+	}
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if offset, err := strconv.Atoi(offsetStr); err == nil {
+			req.Offset = offset
+		}
+	}
+
+	schedules, err := h.scheduleService.GetSchedules(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve user schedules", "details": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -400,10 +319,10 @@ func (h *ScheduleHandler) GetUserSchedules(c *gin.Context) {
 		"data":    schedules,
 		"user_id": userID,
 		"filters": gin.H{
-			"status": status,
-			"date":   date,
-			"limit":  limit,
-			"offset": offset,
+			"status": req.Status,
+			"date":   req.Date,
+			"limit":  req.Limit,
+			"offset": req.Offset,
 		},
 	})
 }
@@ -412,33 +331,15 @@ func (h *ScheduleHandler) GetUserSchedules(c *gin.Context) {
 func (h *ScheduleHandler) GetTodaySchedules(c *gin.Context) {
 	today := time.Now().Format("2006-01-02")
 
-	// Parse optional filters
-	expertID := c.Query("expert_id")
-	status := c.Query("status")
+	var req model.GetSchedulesRequest
+	req.Date = today
+	req.ExpertID = c.Query("expert_id") // Optional filter
+	req.Status = c.Query("status")      // Optional filter
 
-	// TODO: Add business logic to fetch today's schedules
-	// Example response
-	schedules := []ScheduleWithDetails{
-		{
-			Schedule: Schedule{
-				ID:             1,
-				ExpertID:       1,
-				UserID:         1,
-				AvailabilityID: 1,
-				Date:           today,
-				StartTime:      "09:00",
-				EndTime:        "10:00",
-				Status:         StatusConfirmed,
-				Title:          "Morning Consultation",
-				Description:    "Follow-up session",
-				MeetingLink:    "https://meet.google.com/abc-def-ghi",
-				CreatedAt:      time.Now(),
-				UpdatedAt:      time.Now(),
-			},
-			ExpertName: "Dr. John Smith",
-			UserName:   "Jane Doe",
-			UserEmail:  "jane@example.com",
-		},
+	schedules, err := h.scheduleService.GetSchedules(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve today's schedules", "details": err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -446,27 +347,22 @@ func (h *ScheduleHandler) GetTodaySchedules(c *gin.Context) {
 		"data":    schedules,
 		"date":    today,
 		"filters": gin.H{
-			"expert_id": expertID,
-			"status":    status,
+			"expert_id": req.ExpertID,
+			"status":    req.Status,
 		},
 	})
 }
 
 // DeleteSchedule deletes a schedule
 func (h *ScheduleHandler) DeleteSchedule(c *gin.Context) {
-	id, err := strconv.Atoi(c.Param("id"))
+	id := c.Param("id")              // ID is already a string (UUID)
+	offTimeID, err := uuid.Parse(id) // Use offTimeID instead of id for consistency with the Availability handler
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID format"})
 		return
 	}
 
-	idStr := strconv.Itoa(id)
-	idUUID, err := uuid.Parse(idStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid schedule ID"})
-		return
-	}
-	if err := h.scheduleService.DeleteSchedule(idUUID); err != nil {
+	if err := h.scheduleService.DeleteSchedule(offTimeID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete schedule"})
 		return
 	}
@@ -474,6 +370,47 @@ func (h *ScheduleHandler) DeleteSchedule(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"message": "Schedule deleted successfully",
+	})
+}
+
+// GetUpcomingSchedules retrieves upcoming schedules for a specific expert
+func (h *ScheduleHandler) GetUpcomingSchedules(c *gin.Context) {
+	expertID := c.Query("expert_id")
+	daysStr := c.Query("days")
+
+	days := 7 // Default to 7 days
+	if daysStr != "" {
+		if d, err := strconv.Atoi(daysStr); err == nil && d > 0 {
+			days = d
+		}
+	}
+
+	startDate := time.Now().Format("2006-01-02")
+	endDate := time.Now().AddDate(0, 0, days).Format("2006-01-02")
+
+	var req model.GetSchedulesRequest
+	req.ExpertID = expertID
+	// For upcoming schedules, we typically look for pending or confirmed
+	req.Status = "pending" // Or fetch both pending and confirmed
+	// req.Status = "confirmed"
+	// We need a way to filter by date range in GetSchedules, for now, we'll just pass expertID.
+	// A more robust solution would involve adding startDate/endDate to GetSchedulesRequest and repository.
+
+	schedules, err := h.scheduleService.GetSchedules(&req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve upcoming schedules", "details": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":   true,
+		"data":      schedules,
+		"expert_id": expertID,
+		"days":      days,
+		"filters": gin.H{
+			"start_date": startDate,
+			"end_date":   endDate,
+		},
 	})
 }
 
@@ -486,11 +423,4 @@ func isValidStatus(status string) bool {
 		}
 	}
 	return false
-}
-
-func getStringValueOrDefault(value, defaultValue string) string {
-	if value == "" {
-		return defaultValue
-	}
-	return value
 }

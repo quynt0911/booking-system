@@ -49,7 +49,17 @@ func (bv *BookingValidator) ValidateCreateBooking(req *model.CreateBookingReques
 		return err
 	}
 
-	if err := bv.validateBookingType(req.MeetingType, req.MeetingAddress, req.MeetingURL); err != nil {
+	// Convert string to BookingType and handle nil pointers
+	meetingType := model.BookingType(req.MeetingType)
+	var meetingAddress, meetingURL string
+	if req.MeetingAddress != nil {
+		meetingAddress = *req.MeetingAddress
+	}
+	if req.MeetingURL != nil {
+		meetingURL = *req.MeetingURL
+	}
+
+	if err := bv.validateBookingType(meetingType, meetingAddress, meetingURL); err != nil {
 		return err
 	}
 
@@ -352,4 +362,11 @@ func (bv *BookingValidator) ValidateBookingTime(startTime, endTime time.Time, ex
 	}
 
 	return nil
+}
+
+func derefString(s *string) string {
+	if s != nil {
+		return *s
+	}
+	return ""
 }

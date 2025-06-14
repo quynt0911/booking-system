@@ -50,6 +50,7 @@ services:
       # Sửa để kết nối đúng với postgres container
       - USER_SERVICE_DSN=host=postgres user=postgres password=password123 dbname=consultation_booking port=5432 sslmode=disable
       - JWT_SECRET=your-secret
+      - BOOKING_SERVICE_URL=http://booking-service:8082
     depends_on:
       postgres:
         condition: service_healthy
@@ -65,7 +66,7 @@ services:
     environment:
       - BOOKING_SERVICE_DSN=host=postgres user=postgres password=password123 dbname=consultation_booking port=5432 sslmode=disable
       - JWT_SECRET=your-secret
-      - REDIS_URL=redis:6379
+      - REDIS_URL=redis://:redis_password_123@redis:6379/0
       - PORT=8082
     depends_on:
       postgres:

@@ -10,14 +10,15 @@ import (
 
 // CreateBookingRequest struct for creating a new booking
 type CreateBookingRequest struct {
-	ExpertID        uuid.UUID   `json:"expert_id" validate:"required"`
-	ScheduledTime   time.Time   `json:"scheduled_datetime" validate:"required"`
-	DurationMinutes int         `json:"duration_minutes" validate:"required,min=15,max=480"`
-	MeetingType     BookingType `json:"meeting_type" validate:"required,oneof=online offline"`
-	Notes           string      `json:"notes" validate:"max=1000"`
-	MeetingAddress  string      `json:"meeting_address,omitempty" validate:"max=255"`
-	MeetingURL      string      `json:"meeting_url,omitempty" validate:"max=255,url"`
-	Price           float64     `json:"price,omitempty" validate:"min=0"`
+	ExpertID        uuid.UUID `json:"expert_id" binding:"required"`
+	ScheduledTime   time.Time `json:"start_time" binding:"required"`
+	EndTime         time.Time `json:"end_time" binding:"required"`
+	DurationMinutes int       `json:"duration_minutes"`
+	MeetingType     string    `json:"meeting_type"`
+	MeetingURL      *string   `json:"meeting_url,omitempty"`
+	MeetingAddress  *string   `json:"meeting_address,omitempty"`
+	Notes           string    `json:"notes"`
+	Status          string    `json:"status"`
 }
 
 // Validate validates the create booking request
@@ -25,13 +26,13 @@ func (req *CreateBookingRequest) Validate() error {
 	if req.DurationMinutes < 15 || req.DurationMinutes > 480 {
 		return fmt.Errorf("duration must be between 15 and 480 minutes")
 	}
-	if req.MeetingType != TypeOnline && req.MeetingType != TypeOffline {
+	if req.MeetingType != string(TypeOnline) && req.MeetingType != string(TypeOffline) {
 		return fmt.Errorf("invalid booking type")
 	}
-	if req.MeetingType == TypeOffline && req.MeetingAddress == "" {
+	if req.MeetingType == string(TypeOffline) && req.MeetingAddress == nil {
 		return fmt.Errorf("meeting address is required for offline booking")
 	}
-	if req.MeetingType == TypeOnline && req.MeetingURL == "" {
+	if req.MeetingType == string(TypeOnline) && req.MeetingURL == nil {
 		return fmt.Errorf("meeting URL is required for online booking")
 	}
 	return nil

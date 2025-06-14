@@ -31,11 +31,19 @@ func SetupRoutes(
 		schedules.GET("/:id", scheduleHandler.GetScheduleByID)
 		schedules.PUT("/:id", scheduleHandler.UpdateSchedule)
 		schedules.DELETE("/:id", scheduleHandler.DeleteSchedule)
+		schedules.GET("/upcoming", scheduleHandler.GetUpcomingSchedules)
 	}
 
 	// Availability routes
-	availability := router.Group("/api/availability")
+	availability := router.Group("/api/v1/availability")
 	{
+		availability.POST("", availabilityHandler.CreateAvailability)
+		availability.GET("", availabilityHandler.GetAvailabilities)
+		availability.GET("/:id", availabilityHandler.GetAvailabilityByID)
+		availability.PUT("/:id", availabilityHandler.UpdateAvailability)
+		availability.DELETE("/:id", availabilityHandler.DeleteAvailability)
+		availability.POST("/:id/book", availabilityHandler.BookAvailability)
+		availability.POST("/recurring", availabilityHandler.CreateRecurringAvailability)
 		availability.POST("/check", availabilityHandler.CheckAvailability)
 		availability.POST("/off-time", availabilityHandler.CreateOffTime)
 		availability.GET("/off-time/:expert_id", availabilityHandler.GetExpertOffTimes)

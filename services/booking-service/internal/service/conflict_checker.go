@@ -77,6 +77,11 @@ func (c *ConflictChecker) CheckBookingConflict(expertID, userID uuid.UUID, start
 }
 
 func (c *ConflictChecker) CheckExpertAvailability(expertID uuid.UUID, startTime, endTime time.Time) (bool, error) {
+	// First validate the time slot to check for expired times
+	if err := c.ValidateTimeSlot(startTime, endTime); err != nil {
+		return false, err // Return false availability for expired/invalid slots
+	}
+
 	// First check Redis cache for quick lookup
 	cacheKey := fmt.Sprintf("expert_busy:%s:%s:%s",
 		expertID.String(),
@@ -163,11 +168,19 @@ func (c *ConflictChecker) ReleaseLock(lockKey string) error {
 
 func (c *ConflictChecker) CheckMultipleTimeSlots(expertID uuid.UUID, timeSlots []TimeSlot) (map[int]bool, error) {
 	availability := make(map[int]bool)
+	now := time.Now()
 
 	for i, slot := range timeSlots {
+		// Skip expired slots
+		if slot.StartTime.Before(now) {
+			availability[i] = false
+			continue
+		}
+
 		// Validate time slot
 		if err := c.ValidateTimeSlot(slot.StartTime, slot.EndTime); err != nil {
-			return nil, fmt.Errorf("invalid time slot %d: %v", i, err)
+			availability[i] = false
+			continue
 		}
 
 		available, err := c.CheckExpertAvailability(expertID, slot.StartTime, slot.EndTime)
@@ -219,6 +232,13 @@ func (c *ConflictChecker) IsTimeSlotOverlapping(start1, end1, start2, end2 time.
 }
 
 func (c *ConflictChecker) ValidateTimeSlot(startTime, endTime time.Time) error {
+	now := time.Now()
+
+	// Check if booking is in the past
+	if startTime.Before(now) {
+		return fmt.Errorf("time slot has expired")
+	}
+
 	if endTime.Before(startTime) || endTime.Equal(startTime) {
 		return fmt.Errorf("end time must be after start time")
 	}
@@ -233,13 +253,8 @@ func (c *ConflictChecker) ValidateTimeSlot(startTime, endTime time.Time) error {
 	}
 
 	// Check if booking is too far in the future (max 6 months)
-	if startTime.After(time.Now().AddDate(0, 6, 0)) {
+	if startTime.After(now.AddDate(0, 6, 0)) {
 		return fmt.Errorf("cannot book more than 6 months in advance")
-	}
-
-	// Check if booking is in the past
-	if startTime.Before(time.Now()) {
-		return fmt.Errorf("cannot book in the past")
 	}
 
 	return nil

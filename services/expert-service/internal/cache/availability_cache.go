@@ -10,9 +10,9 @@ import (
 )
 
 type AvailabilityCache interface {
-	SetAvailability(expertID int, date string, isAvailable bool) error
-	GetAvailability(expertID int, date string) (bool, bool, error) // value, exists, error
-	InvalidateExpert(expertID int) error
+	SetAvailability(key string, value []byte) error
+	GetAvailability(key string) ([]byte, error)
+	InvalidateExpert(expertID string) error
 }
 
 type availabilityCache struct {
@@ -27,14 +27,57 @@ func NewAvailabilityCache(client *redis.Client, ttl time.Duration) AvailabilityC
 	}
 }
 
-func (c *availabilityCache) SetAvailability(expertID int, date string, isAvailable bool) error {
+func (c *availabilityCache) SetAvailability(key string, value []byte) error {
+	return c.client.Set(context.Background(), key, value, c.ttl).Err()
+}
+
+func (c *availabilityCache) GetAvailability(key string) ([]byte, error) {
+	val, err := c.client.Get(context.Background(), key).Result()
+	if err == redis.Nil {
+		return nil, nil // Key not found
+	}
+	if err != nil {
+		return nil, err
+	}
+	return []byte(val), nil
+}
+
+func (c *availabilityCache) InvalidateExpert(expertID string) error {
+	// Invalidate availability check cache keys (e.g., "expertID:date")
+	pattern1 := fmt.Sprintf("%s:*", expertID)
+	keys1, err := c.client.Keys(context.Background(), pattern1).Result()
+	if err != nil {
+		return fmt.Errorf("failed to get keys for pattern %s: %w", pattern1, err)
+	}
+	if len(keys1) > 0 {
+		if err := c.client.Del(context.Background(), keys1...).Err(); err != nil {
+			return fmt.Errorf("failed to delete keys for pattern %s: %w", pattern1, err)
+		}
+	}
+
+	// Invalidate availability slot keys (e.g., "availability:expertID:date")
+	pattern2 := fmt.Sprintf("availability:%s:*", expertID)
+	keys2, err := c.client.Keys(context.Background(), pattern2).Result()
+	if err != nil {
+		return fmt.Errorf("failed to get keys for pattern %s: %w", pattern2, err)
+	}
+	if len(keys2) > 0 {
+		if err := c.client.Del(context.Background(), keys2...).Err(); err != nil {
+			return fmt.Errorf("failed to delete keys for pattern %s: %w", pattern2, err)
+		}
+	}
+
+	return nil
+}
+
+func (c *availabilityCache) SetAvailabilityRedis(expertID int, date string, isAvailable bool) error {
 	key := c.getKey(expertID, date)
 	value, _ := json.Marshal(isAvailable)
 
 	return c.client.Set(context.Background(), key, value, c.ttl).Err()
 }
 
-func (c *availabilityCache) GetAvailability(expertID int, date string) (bool, bool, error) {
+func (c *availabilityCache) GetAvailabilityRedis(expertID int, date string) (bool, bool, error) {
 	key := c.getKey(expertID, date)
 
 	val, err := c.client.Get(context.Background(), key).Result()
@@ -50,7 +93,7 @@ func (c *availabilityCache) GetAvailability(expertID int, date string) (bool, bo
 	return isAvailable, true, err
 }
 
-func (c *availabilityCache) InvalidateExpert(expertID int) error {
+func (c *availabilityCache) InvalidateExpertRedis(expertID int) error {
 	pattern := fmt.Sprintf("availability:expert:%d:*", expertID)
 
 	keys, err := c.client.Keys(context.Background(), pattern).Result()

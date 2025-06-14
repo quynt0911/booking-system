@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"fmt"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"services/user-service/middleware"
 	"services/user-service/model"
 	"services/user-service/service"
@@ -20,6 +23,7 @@ func RegisterRoutes(r *gin.Engine, userService service.UserService, jwtService s
 		userGroup.GET("/profile", middleware.AuthMiddleware(jwtService), GetProfile(userService))
 		userGroup.PUT("/profile", middleware.AuthMiddleware(jwtService), UpdateProfile(userService))
 		userGroup.DELETE("/profile", middleware.AuthMiddleware(jwtService), DeleteProfile(userService))
+		userGroup.GET("/bookings", middleware.AuthMiddleware(jwtService), GetBookingHistory())
 	}
 }
 
@@ -155,5 +159,42 @@ func DeleteProfile(userService service.UserService) gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusOK, gin.H{"message": "User deleted successfully"})
+	}
+}
+
+func GetBookingHistory() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.GetString("userID")
+		page := c.DefaultQuery("page", "1")
+		limit := c.DefaultQuery("limit", "10")
+		status := c.Query("status")
+		// ... các query khác nếu cần
+
+		// Build URL booking-service
+		bookingServiceURL := os.Getenv("BOOKING_SERVICE_URL") // ví dụ: http://booking-service:8082
+		url := fmt.Sprintf("%s/GetUserBookings?user_id=%s&page=%s&limit=%s", bookingServiceURL, userID, page, limit)
+		if status != "" {
+			url += "&status=" + status
+		}
+
+		// Gửi request sang booking-service
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal error"})
+			return
+		}
+		// Truyền JWT từ header gốc
+		req.Header.Set("Authorization", c.GetHeader("Authorization"))
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Cannot connect to booking service"})
+			return
+		}
+		defer resp.Body.Close()
+
+		body, _ := ioutil.ReadAll(resp.Body)
+		c.Data(resp.StatusCode, "application/json", body)
 	}
 }

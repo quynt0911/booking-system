@@ -66,12 +66,11 @@ func (s *BookingService) CreateBooking(userID uuid.UUID, req *model.CreateBookin
 		ExpertID:        req.ExpertID,
 		ScheduledTime:   req.ScheduledTime,
 		DurationMinutes: req.DurationMinutes,
-		MeetingType:     req.MeetingType,
+		MeetingType:     model.BookingType(req.MeetingType),
 		Status:          model.BookingStatusPending,
-		MeetingAddress:  req.MeetingAddress,
-		MeetingURL:      req.MeetingURL,
+		MeetingAddress:  derefString(req.MeetingAddress),
+		MeetingURL:      derefString(req.MeetingURL),
 		Notes:           req.Notes,
-		Price:           req.Price,
 		CreatedAt:       time.Now(),
 		UpdatedAt:       time.Now(),
 	}
@@ -140,16 +139,13 @@ func (s *BookingService) UpdateBooking(bookingID uuid.UUID, req *model.UpdateBoo
 		booking.Notes = *req.Notes
 	}
 	if req.MeetingType != nil {
-		booking.MeetingType = *req.MeetingType
+		booking.MeetingType = model.BookingType(*req.MeetingType)
 	}
 	if req.MeetingAddress != nil {
 		booking.MeetingAddress = *req.MeetingAddress
 	}
 	if req.MeetingURL != nil {
 		booking.MeetingURL = *req.MeetingURL
-	}
-	if req.Price != nil {
-		booking.Price = *req.Price
 	}
 
 	booking.UpdatedAt = time.Now()
@@ -476,4 +472,11 @@ func (s *BookingService) notifyBookingUpdated(booking *model.Booking) {
 // Helper function to notify about booking cancellation
 func (s *BookingService) notifyBookingCancelled(booking *model.Booking) {
 	// TODO: Implement notification logic
+}
+
+func derefString(s *string) string {
+	if s != nil {
+		return *s
+	}
+	return ""
 }

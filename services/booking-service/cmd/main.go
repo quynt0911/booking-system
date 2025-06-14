@@ -17,6 +17,7 @@ import (
 	"services/booking-service/internal/service"
 	"services/booking-service/pkg/database"
 	"services/booking-service/pkg/logger"
+	"services/booking-service/pkg/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -71,6 +72,7 @@ func main() {
 	}
 
 	router := gin.Default()
+	router.Use(utils.JWTAuthMiddleware())
 
 	// Setup routes
 	routes.SetupRoutes(router, bookingHandler, statusHandler, historyHandler)

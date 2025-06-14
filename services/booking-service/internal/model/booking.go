@@ -32,7 +32,7 @@ type Booking struct {
 	ID              uuid.UUID     `json:"id" gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	UserID          uuid.UUID     `json:"user_id" gorm:"type:uuid"`
 	ExpertID        uuid.UUID     `json:"expert_id" gorm:"type:uuid"`
-	ScheduledTime   time.Time     `json:"scheduled_datetime"`
+	ScheduledTime   time.Time     `json:"scheduled_datetime" gorm:"column:scheduled_datetime"`
 	DurationMinutes int           `json:"duration_minutes" gorm:"default:60"`
 	MeetingType     BookingType   `json:"meeting_type" gorm:"default:'online'"`
 	MeetingURL      string        `json:"meeting_url,omitempty"`

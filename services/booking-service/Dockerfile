@@ -8,7 +8,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN go build -o booking-service
+RUN go build -o booking-service ./cmd/main.go
 
 EXPOSE 8082
 
