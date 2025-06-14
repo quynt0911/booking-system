@@ -12,9 +12,9 @@ import (
 type UserService interface {
 	Register(req model.RegisterRequest) (*model.User, error)
 	Login(req model.LoginRequest) (*model.User, error)
-	GetProfile(userID string) (*model.User, error)
-	UpdateProfile(userID string, req model.UpdateProfileRequest) (*model.User, error)
-	DeleteProfile(userID string) error
+	GetProfile(userID uuid.UUID) (*model.User, error)
+	UpdateProfile(userID uuid.UUID, req model.UpdateProfileRequest) (*model.User, error)
+	DeleteProfile(userID uuid.UUID) error
 }
 
 type userService struct {
@@ -31,16 +31,18 @@ func (s *userService) Register(req model.RegisterRequest) (*model.User, error) {
 		return nil, err
 	}
 	user := &model.User{
-		ID:       uuid.NewString(),
-		Email:    req.Email,
-		Password: hashed,
-		FullName: req.FullName,
-		Role:     model.UserRole(req.Role),
+		ID:           uuid.New(),
+		Email:        req.Email,
+		PasswordHash: hashed,
+		FullName:     req.FullName,
+		Phone:        req.Phone,
+		Gender:       req.Gender,
+		Role:         model.UserRole(req.Role),
 	}
 	if err := s.repo.Create(user); err != nil {
 		return nil, err
 	}
-	user.Password = ""
+	user.PasswordHash = ""
 	return user, nil
 }
 
@@ -49,35 +51,49 @@ func (s *userService) Login(req model.LoginRequest) (*model.User, error) {
 	if err != nil {
 		return nil, errors.New("invalid email or password")
 	}
-	if !utils.CheckPasswordHash(req.Password, user.Password) {
+	if !utils.CheckPasswordHash(req.Password, user.PasswordHash) {
 		return nil, errors.New("invalid email or password")
 	}
-	user.Password = ""
+	user.PasswordHash = ""
 	return user, nil
 }
 
-func (s *userService) GetProfile(userID string) (*model.User, error) {
+func (s *userService) GetProfile(userID uuid.UUID) (*model.User, error) {
 	user, err := s.repo.FindByID(userID)
 	if err != nil {
 		return nil, err
 	}
-	user.Password = ""
+	user.PasswordHash = ""
 	return user, nil
 }
 
-func (s *userService) UpdateProfile(userID string, req model.UpdateProfileRequest) (*model.User, error) {
+func (s *userService) UpdateProfile(userID uuid.UUID, req model.UpdateProfileRequest) (*model.User, error) {
 	user, err := s.repo.FindByID(userID)
 	if err != nil {
 		return nil, err
 	}
-	user.FullName = req.FullName
+	if req.FullName != "" {
+		user.FullName = req.FullName
+	}
+	if req.Phone != "" {
+		user.Phone = req.Phone
+	}
+	if req.Image != "" {
+		user.Image = req.Image
+	}
+	if req.Gender != "" {
+		user.Gender = req.Gender
+	}
+	if req.Description != "" {
+		user.Description = req.Description
+	}
 	if err := s.repo.Update(user); err != nil {
 		return nil, err
 	}
-	user.Password = ""
+	user.PasswordHash = ""
 	return user, nil
 }
 
-func (s *userService) DeleteProfile(userID string) error {
+func (s *userService) DeleteProfile(userID uuid.UUID) error {
 	return s.repo.Delete(userID)
 }

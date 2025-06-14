@@ -1,0 +1,287 @@
+{
+	"info": {
+		"_postman_id": "your-collection-id",
+		"name": "Booking System APIs",
+		"description": "Collection for testing Booking System microservices",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth Service",
+			"item": [
+				{
+					"name": "Register",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"password123\",\n    \"full_name\": \"Test User\",\n    \"phone\": \"0123456789\",\n    \"role\": \"user\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8081/api/v1/auth/register",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8081",
+							"path": ["api", "v1", "auth", "register"]
+						}
+					}
+				},
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"email\": \"test@example.com\",\n    \"password\": \"password123\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8081/api/v1/auth/login",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8081",
+							"path": ["api", "v1", "auth", "login"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "User Service",
+			"item": [
+				{
+					"name": "Get User Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:8082/api/v1/users/profile",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8082",
+							"path": ["api", "v1", "users", "profile"]
+						}
+					}
+				},
+				{
+					"name": "Update User Profile",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"full_name\": \"Updated Name\",\n    \"phone\": \"0987654321\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8082/api/v1/users/profile",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8082",
+							"path": ["api", "v1", "users", "profile"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Expert Service",
+			"item": [
+				{
+					"name": "Create Expert Profile",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"user_id\": \"{{user_id}}\",\n    \"bio\": \"Experienced professional\",\n    \"specialization\": \"Technology\",\n    \"years_of_experience\": 5,\n    \"hourly_rate\": 50.00,\n    \"availability\": [\n        {\n            \"day\": \"Monday\",\n            \"start_time\": \"09:00\",\n            \"end_time\": \"17:00\"\n        }\n    ]\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8083/api/v1/experts",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8083",
+							"path": ["api", "v1", "experts"]
+						}
+					}
+				},
+				{
+					"name": "Get Expert Profile",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:8083/api/v1/experts/{{expert_id}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8083",
+							"path": ["api", "v1", "experts", "{{expert_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Booking Service",
+			"item": [
+				{
+					"name": "Create Booking",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"expert_id\": \"{{expert_id}}\",\n    \"user_id\": \"{{user_id}}\",\n    \"start_time\": \"2024-03-20T10:00:00Z\",\n    \"end_time\": \"2024-03-20T11:00:00Z\",\n    \"status\": \"pending\",\n    \"notes\": \"Initial consultation\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8084/api/v1/bookings",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8084",
+							"path": ["api", "v1", "bookings"]
+						}
+					}
+				},
+				{
+					"name": "Get Booking",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:8084/api/v1/bookings/{{booking_id}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8084",
+							"path": ["api", "v1", "bookings", "{{booking_id}}"]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "Payment Service",
+			"item": [
+				{
+					"name": "Create Payment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"booking_id\": \"{{booking_id}}\",\n    \"amount\": 50.00,\n    \"currency\": \"USD\",\n    \"payment_method\": \"credit_card\"\n}"
+						},
+						"url": {
+							"raw": "http://localhost:8085/api/v1/payments",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8085",
+							"path": ["api", "v1", "payments"]
+						}
+					}
+				},
+				{
+					"name": "Get Payment",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "http://localhost:8085/api/v1/payments/{{payment_id}}",
+							"protocol": "http",
+							"host": ["localhost"],
+							"port": "8085",
+							"path": ["api", "v1", "payments", "{{payment_id}}"]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "auth_token",
+			"value": "your_auth_token_here"
+		},
+		{
+			"key": "user_id",
+			"value": "your_user_id_here"
+		},
+		{
+			"key": "expert_id",
+			"value": "your_expert_id_here"
+		},
+		{
+			"key": "booking_id",
+			"value": "your_booking_id_here"
+		},
+		{
+			"key": "payment_id",
+			"value": "your_payment_id_here"
+		}
+	]
+} 
