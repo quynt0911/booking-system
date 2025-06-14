@@ -2,7 +2,7 @@ package main
 
 import (
 	"log"
-	"worker/internal/scheduler"
+	"worker-service/internal/scheduler"
 )
 
 func main() {

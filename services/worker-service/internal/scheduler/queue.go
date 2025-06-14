@@ -2,7 +2,7 @@ package scheduler
 
 import (
 	"log"
-	"worker/internal/jobs"
+	"worker-service/internal/jobs"
 )
 
 func StartQueueProcessor() {

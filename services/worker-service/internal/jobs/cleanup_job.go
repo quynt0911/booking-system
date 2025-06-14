@@ -2,7 +2,7 @@ package jobs
 
 import (
 	"log"
-	"worker/internal/service"
+	"worker-service/internal/service"
 )
 
 func RunCleanupJob() {
