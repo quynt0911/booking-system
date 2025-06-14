@@ -1,14 +1,21 @@
 package routes
 
 import (
-	"github.com/gin-gonic/gin"
 	"notification-service/internal/handler"
-	"notification-service/internal/websocket"
+
+	"github.com/gin-gonic/gin"
 )
 
-func SetupRoutes(r *gin.Engine) {
-	hub := websocket.NewHub()
-	r.GET("/ws", handler.WebSocketHandler(hub))
-	r.GET("/notifications", handler.GetRecentNotifications)
-	r.POST("/settings", handler.UpdateNotificationSettings)
+func SetupRoutes(
+	router *gin.Engine,
+	notificationHandler *handler.NotificationHandler,
+	websocketHandler *handler.WebSocketHandler,
+	settingsHandler *handler.SettingsHandler,
+) {
+	// WebSocket route
+	router.GET("/ws", websocketHandler.HandleWebSocket)
+
+	// Other routes...
+	router.GET("/notifications", notificationHandler.GetRecentNotifications)
+	router.POST("/settings", settingsHandler.UpdateNotificationSettings)
 }

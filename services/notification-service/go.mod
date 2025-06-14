@@ -1,8 +1,16 @@
-module notification-service
+module github.com/your-org/booking-system/services/notification-service
 
 go 1.21
 
-require github.com/gin-gonic/gin v1.10.1
+require (
+	github.com/gin-gonic/gin v1.9.1
+	github.com/gorilla/websocket v1.5.1
+	github.com/joho/godotenv v1.5.1
+	gorm.io/gorm v1.25.5
+	gorm.io/driver/postgres v1.5.4
+	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
+	github.com/jordan-wright/email v4.0.1-0.20210109023952-943e75b5223f+incompatible
+)
 
 require (
 	github.com/bytedance/sonic v1.11.6 // indirect

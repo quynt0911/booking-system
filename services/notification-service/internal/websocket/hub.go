@@ -1,15 +1,60 @@
 package websocket
 
+import (
+	"log"
+	"sync"
+)
+
 type Hub struct {
-	Clients map[string]*Client
+	clients    map[*Client]bool
+	broadcast  chan []byte
+	register   chan *Client
+	unregister chan *Client
+	mu         sync.RWMutex
 }
 
 func NewHub() *Hub {
-	return &Hub{Clients: make(map[string]*Client)}
+	return &Hub{
+		clients:    make(map[*Client]bool),
+		broadcast:  make(chan []byte),
+		register:   make(chan *Client),
+		unregister: make(chan *Client),
+	}
 }
 
-func (h *Hub) Broadcast(userID, message string) {
-	if c, ok := h.Clients[userID]; ok {
-		c.Send(message)
+func (h *Hub) Run() {
+	for {
+		select {
+		case client := <-h.register:
+			h.mu.Lock()
+			h.clients[client] = true
+			h.mu.Unlock()
+			log.Printf("Client registered. Total clients: %d", len(h.clients))
+
+		case client := <-h.unregister:
+			h.mu.Lock()
+			if _, ok := h.clients[client]; ok {
+				delete(h.clients, client)
+				close(client.send)
+			}
+			h.mu.Unlock()
+			log.Printf("Client unregistered. Total clients: %d", len(h.clients))
+
+		case message := <-h.broadcast:
+			h.mu.RLock()
+			for client := range h.clients {
+				select {
+				case client.send <- message:
+				default:
+					close(client.send)
+					delete(h.clients, client)
+				}
+			}
+			h.mu.RUnlock()
+		}
 	}
+}
+
+func (h *Hub) Broadcast(message []byte) {
+	h.broadcast <- message
 }

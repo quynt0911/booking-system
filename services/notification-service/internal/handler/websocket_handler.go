@@ -1,13 +1,20 @@
 package handler
 
 import (
-	"notification-service/internal/websocket"
-
 	"github.com/gin-gonic/gin"
+	"github.com/your-org/booking-system/services/notification-service/internal/service"
 )
 
-func WebSocketHandler(hub *websocket.Hub) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		websocket.ServeWs(hub, c.Writer, c.Request)
+type WebSocketHandler struct {
+	websocketService *service.WebSocketService
+}
+
+func NewWebSocketHandler(websocketService *service.WebSocketService) *WebSocketHandler {
+	return &WebSocketHandler{
+		websocketService: websocketService,
 	}
+}
+
+func (h *WebSocketHandler) HandleWebSocket(c *gin.Context) {
+	h.websocketService.manager.HandleWebSocket(c)
 }
