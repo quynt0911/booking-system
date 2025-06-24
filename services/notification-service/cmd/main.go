@@ -26,19 +26,19 @@ func main() {
 	go hub.Run()
 
 	// Initialize services
-	notificationService := service.NewNotificationService(cfg)
+	// notificationService := service.NewNotificationService(cfg)
 	emailService := service.NewEmailService(cfg)
-	telegramService := service.NewTelegramService(cfg)
-	websocketService := service.NewWebSocketService(hub)
+	// telegramService := service.NewTelegramService(cfg)
+	// websocketService := service.NewWebSocketService(hub)
 
 	// Initialize handlers
-	notificationHandler := handler.NewNotificationHandler(notificationService)
-	websocketHandler := handler.NewWebSocketHandler(websocketService)
-	settingsHandler := handler.NewSettingsHandler(notificationService)
+	notificationHandler := handler.NewNotificationHandler(emailService)
+	// websocketHandler := handler.NewWebSocketHandler(websocketService)
+	// settingsHandler := handler.NewSettingsHandler(notificationService)
 
 	// Setup router
 	router := gin.Default()
-	routes.SetupRoutes(router, notificationHandler, websocketHandler, settingsHandler)
+	routes.SetupRoutes(router, notificationHandler, nil, nil)
 
 	// Start server
 	go func() {

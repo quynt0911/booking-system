@@ -8,13 +8,14 @@ import (
 func SetupRoutes(
 	router *gin.Engine,
 	notificationHandler *handler.NotificationHandler,
-	websocketHandler *handler.WebSocketHandler,
-	settingsHandler *handler.SettingsHandler,
+	websocketHandler interface{},
+	settingsHandler interface{},
 ) {
-	// WebSocket route
-	router.GET("/ws", websocketHandler.HandleWebSocket)
-
-	// Other routes...
-	router.GET("/notifications", notificationHandler.GetRecentNotifications)
-	router.POST("/settings", settingsHandler.UpdateNotificationSettings)
+	if websocketHandler != nil {
+		// router.GET("/ws", websocketHandler.HandleWebSocket)
+	}
+	if notificationHandler != nil {
+		router.POST("/send-email", notificationHandler.SendEmailHandler)
+	}
+	// Các route khác nếu cần
 }
