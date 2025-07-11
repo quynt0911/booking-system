@@ -49,10 +49,35 @@ func NewConflictChecker(
 	}
 }
 
-func (c *ConflictChecker) CheckBookingConflict(expertID, userID uuid.UUID, startTime, endTime time.Time) (bool, error) {
+// clearExpertBusyCache clears expert busy cache for a specific time slot
+func (c *ConflictChecker) clearExpertBusyCache(expertID uuid.UUID, startTime, endTime time.Time) {
+	ctx := context.Background()
+
+	// Clear expert busy time cache
+	busyTimeKey := fmt.Sprintf("expert_busy:%s:%s:%s",
+		expertID.String(),
+		startTime.Format("2006-01-02T15:04:05"),
+		endTime.Format("2006-01-02T15:04:05"))
+
+	c.redisClient.Del(ctx, busyTimeKey)
+}
+
+// CheckBookingConflict checks if there is any conflict for the given time slot
+func (c *ConflictChecker) CheckBookingConflict(expertID uuid.UUID, userID uuid.UUID, startTime, endTime time.Time) (bool, error) {
 	// Validate time slot first
 	if err := c.ValidateTimeSlot(startTime, endTime); err != nil {
 		return false, err
+	}
+
+	// Check if booking exists in database
+	hasConflict, err := c.bookingRepo.HasExpertConflict(expertID, startTime, endTime)
+	if err != nil {
+		return false, err
+	}
+
+	if !hasConflict {
+		// If no conflict in database, clear any existing cache
+		c.clearExpertBusyCache(expertID, startTime, endTime)
 	}
 
 	// Check expert availability

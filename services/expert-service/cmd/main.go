@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"expert-service/internal/cache"
-	"expert-service/internal/handler"
 	"expert-service/internal/repository"
 	"expert-service/internal/routes"
 	"expert-service/internal/service"
@@ -52,24 +51,21 @@ func main() {
 	}
 	availabilityCache := cache.NewAvailabilityCache(redisClient, time.Hour)
 
-	// Repository & Service
+	// Initialize repositories
 	expertRepo := repository.NewExpertRepository(db)
-	scheduleRepo := repository.NewScheduleRepository(db)
+	expertScheduleRepo := repository.NewExpertScheduleRepository(db)
 	offTimeRepo := repository.NewOffTimeRepository(db)
-	expertSvc := service.NewExpertService(expertRepo)
-	scheduleSvc := service.NewScheduleService(scheduleRepo)
-	availabilitySvc := service.NewExpertAvailabilityService(expertRepo, scheduleRepo, offTimeRepo, availabilityCache)
 
-	// Handler
-	expertHandler := handler.NewExpertHandler(expertSvc)
-	scheduleHandler := handler.NewScheduleHandler(scheduleSvc)
-	availabilityHandler := handler.NewAvailabilityHandler(availabilitySvc)
+	// Initialize services
+	expertService := service.NewExpertService(expertRepo)
+	expertScheduleService := service.NewExpertScheduleService(expertScheduleRepo)
+	availabilityService := service.NewExpertAvailabilityService(expertRepo, repository.NewScheduleRepository(db), offTimeRepo, expertScheduleRepo, availabilityCache)
 
-	// Router
+	// Initialize router
 	router := gin.Default()
-	router.Use(gin.Logger())
-	router.Use(gin.Recovery())
-	routes.SetupRoutes(router, expertHandler, scheduleHandler, availabilityHandler)
+
+	// Setup routes
+	routes.SetupRoutes(router, expertService, expertScheduleService, availabilityService)
 
 	port := os.Getenv("PORT")
 	if port == "" {

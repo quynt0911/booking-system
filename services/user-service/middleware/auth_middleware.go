@@ -2,8 +2,8 @@ package middleware
 
 import (
 	"net/http"
-	"services/user-service/service"
 	"strings"
+	"user-service/service"
 
 	"github.com/gin-gonic/gin"
 )

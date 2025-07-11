@@ -1,8 +1,8 @@
 package service
 
 import (
-	"services/user-service/model"
 	"time"
+	"user-service/model"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -23,9 +23,10 @@ func NewJWTService(secret string, expiry int, refreshTokenExpiry int) JWTService
 }
 
 func (j *jwtService) GenerateTokens(user *model.User) (string, string, error) {
-	claims := jwt.RegisteredClaims{
-		Subject:   user.ID.String(),
-		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(j.expiry) * time.Second)),
+	claims := jwt.MapClaims{
+		"sub":  user.ID.String(),
+		"exp":  time.Now().Add(time.Duration(j.expiry) * time.Second).Unix(),
+		"role": user.Role,
 	}
 	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := accessToken.SignedString([]byte(j.secret))

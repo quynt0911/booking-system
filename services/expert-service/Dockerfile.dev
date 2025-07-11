@@ -1,0 +1,27 @@
+# Dockerfile.dev - Cải tiến cho hot reload
+FROM golang:1.24.2-alpine
+
+# Cài đặt Air và các tools cần thiết
+RUN go install github.com/air-verse/air@latest && \
+    apk add --no-cache git
+
+WORKDIR /app
+
+# Tạo thư mục tmp với permissions phù hợp
+RUN mkdir -p tmp && chmod 755 tmp
+
+# Copy go.mod và go.sum trước để tận dụng Docker layer caching
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY . .
+
+# Đảm bảo permissions cho Air
+RUN chmod +x /go/bin/air
+
+# Expose port
+EXPOSE 8083
+
+# Sử dụng Air để hot reload
+CMD ["air", "-c", ".air.toml"]

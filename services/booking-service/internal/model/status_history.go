@@ -9,17 +9,18 @@ import (
 
 // StatusHistory represents a record of booking status changes
 type StatusHistory struct {
-	ID        uuid.UUID     `json:"id" gorm:"primaryKey;type:uuid;default:uuid_generate_v4()"`
+	ID        uuid.UUID     `json:"id" gorm:"primaryKey;type:uuid;default:gen_random_uuid()"`
 	BookingID uuid.UUID     `json:"booking_id" gorm:"type:uuid"`
-	Status    BookingStatus `json:"status"`
+	OldStatus BookingStatus `json:"old_status"`
+	NewStatus BookingStatus `json:"new_status"`
 	ChangedBy uuid.UUID     `json:"changed_by" gorm:"type:uuid"`
-	ChangedAt time.Time     `json:"changed_at"`
-	Note      string        `json:"note,omitempty"`
+	Reason    string        `json:"reason,omitempty"`
+	CreatedAt time.Time     `json:"created_at" gorm:"default:CURRENT_TIMESTAMP"`
 }
 
 // TableName trả về tên bảng trong database
 func (StatusHistory) TableName() string {
-	return "status_histories"
+	return "booking_status_history"
 }
 
 // ChangeType constants

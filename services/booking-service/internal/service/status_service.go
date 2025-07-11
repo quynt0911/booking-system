@@ -53,22 +53,19 @@ func (s *StatusService) UpdateBookingStatus(bookingID uuid.UUID, status model.Bo
 		return err
 	}
 
-	// Update booking status
-	booking.Status = status
-	booking.UpdatedAt = time.Now()
-
-	_, err = s.bookingRepo.Update(booking)
-	if err != nil {
+	// Update booking status using repository function
+	if err := s.bookingRepo.UpdateStatus(bookingID, status); err != nil {
 		return fmt.Errorf("failed to update booking status: %v", err)
 	}
 
 	// Create status history record
 	statusHistory := &model.StatusHistory{
 		BookingID: bookingID,
-		Status:    status,
+		OldStatus: booking.Status,
+		NewStatus: status,
 		ChangedBy: changedBy,
-		ChangedAt: time.Now(),
-		Note:      note,
+		Reason:    note,
+		CreatedAt: time.Now(),
 	}
 
 	if err := s.statusHistoryRepo.Create(statusHistory); err != nil {
@@ -149,8 +146,21 @@ func (s *StatusService) checkStatusUpdateAuthorization(booking *model.Booking, u
 	if userRole == "admin" {
 		return nil
 	}
-	if booking.UserID == userID || booking.ExpertID == userID {
+
+	if booking.UserID == userID {
 		return nil
 	}
+
+	// Nếu là expert, kiểm tra mapping
+	if userRole == "expert" {
+		expertID, err := s.bookingRepo.GetExpertIDByUserID(userID)
+		if err != nil {
+			return fmt.Errorf("failed to get expert ID: %v", err)
+		}
+		if booking.ExpertID == expertID {
+			return nil
+		}
+	}
+
 	return fmt.Errorf("user is not authorized to update this booking status")
 }

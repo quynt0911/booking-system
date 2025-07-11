@@ -31,6 +31,8 @@ type BookingServiceInterface interface {
 	CheckConflict(req *model.CheckConflictRequest) (*model.ConflictCheckResponse, error)
 	CheckConflictWithExclusion(req *model.CheckConflictRequest, excludeID uuid.UUID) (*model.ConflictCheckResponse, error)
 	GetExpertBookingsByDate(expertID uuid.UUID, date time.Time) ([]model.BookingResponse, error)
+	GetExpertIDByUserID(userID uuid.UUID) (uuid.UUID, error)
+	DeleteBooking(bookingID uuid.UUID) error
 }
 
 type BookingService struct {
@@ -84,10 +86,11 @@ func (s *BookingService) CreateBooking(userID uuid.UUID, req *model.CreateBookin
 	// Create initial status history
 	statusHistory := &model.StatusHistory{
 		BookingID: createdBooking.ID,
-		Status:    model.BookingStatusPending,
+		OldStatus: "",
+		NewStatus: model.BookingStatusPending,
 		ChangedBy: userID,
-		ChangedAt: time.Now(),
-		Note:      "Booking created",
+		Reason:    "Booking created",
+		CreatedAt: time.Now(),
 	}
 
 	if err := s.statusHistoryRepo.Create(statusHistory); err != nil {
@@ -96,6 +99,21 @@ func (s *BookingService) CreateBooking(userID uuid.UUID, req *model.CreateBookin
 
 	// Cache booking data
 	s.cacheBooking(createdBooking)
+
+	// Clear expert and user availability cache
+	ctx := context.Background()
+	expertCachePattern := fmt.Sprintf("expert_*:%s:*", createdBooking.ExpertID.String())
+	userCachePattern := fmt.Sprintf("user_*:%s:*", createdBooking.UserID.String())
+
+	// Delete all expert related cache
+	if keys, err := s.redisClient.Keys(ctx, expertCachePattern).Result(); err == nil && len(keys) > 0 {
+		s.redisClient.Del(ctx, keys...)
+	}
+
+	// Delete all user related cache
+	if keys, err := s.redisClient.Keys(ctx, userCachePattern).Result(); err == nil && len(keys) > 0 {
+		s.redisClient.Del(ctx, keys...)
+	}
 
 	// TODO: Send notification to expert
 	s.notifyBookingCreated(createdBooking)
@@ -126,6 +144,17 @@ func (s *BookingService) UpdateBooking(bookingID uuid.UUID, req *model.UpdateBoo
 	booking, err := s.bookingRepo.GetByID(bookingID)
 	if err != nil {
 		return nil, err
+	}
+
+	// Check if booking can be updated based on status
+	if booking.Status == model.BookingStatusCancelled {
+		return nil, fmt.Errorf("cannot update cancelled booking")
+	}
+	if booking.Status == model.BookingStatusCompleted {
+		return nil, fmt.Errorf("cannot update completed booking")
+	}
+	if booking.Status == model.BookingStatusRejected {
+		return nil, fmt.Errorf("cannot update rejected booking")
 	}
 
 	// Update fields
@@ -186,10 +215,11 @@ func (s *BookingService) CancelBooking(bookingID uuid.UUID, userID uuid.UUID, re
 	// Create status history
 	statusHistory := &model.StatusHistory{
 		BookingID: bookingID,
-		Status:    model.BookingStatusCancelled,
+		OldStatus: booking.Status,
+		NewStatus: model.BookingStatusCancelled,
 		ChangedBy: userID,
-		ChangedAt: time.Now(),
-		Note:      req.Reason,
+		Reason:    req.Reason,
+		CreatedAt: time.Now(),
 	}
 
 	if err := s.statusHistoryRepo.Create(statusHistory); err != nil {
@@ -412,6 +442,51 @@ func (s *BookingService) GetExpertBookingsByDate(expertID uuid.UUID, date time.T
 	}
 
 	return responses, nil
+}
+
+func (s *BookingService) GetExpertIDByUserID(userID uuid.UUID) (uuid.UUID, error) {
+	return s.bookingRepo.GetExpertIDByUserID(userID)
+}
+
+// DeleteBooking deletes a booking and clears related cache
+func (s *BookingService) DeleteBooking(bookingID uuid.UUID) error {
+	// Get booking before deletion to get expert and user IDs
+	booking, err := s.bookingRepo.GetByID(bookingID)
+	if err != nil {
+		return fmt.Errorf("failed to get booking: %v", err)
+	}
+
+	// Delete from database
+	if err := s.bookingRepo.Delete(bookingID); err != nil {
+		return fmt.Errorf("failed to delete booking: %v", err)
+	}
+
+	// Clear all related cache
+	ctx := context.Background()
+
+	// 1. Clear booking cache
+	bookingKey := fmt.Sprintf("booking:%s", bookingID.String())
+	s.redisClient.Del(ctx, bookingKey)
+
+	// 2. Clear expert cache
+	expertCachePattern := fmt.Sprintf("expert_*:%s:*", booking.ExpertID.String())
+	if keys, err := s.redisClient.Keys(ctx, expertCachePattern).Result(); err == nil && len(keys) > 0 {
+		s.redisClient.Del(ctx, keys...)
+	}
+
+	// 3. Clear user cache
+	userCachePattern := fmt.Sprintf("user_*:%s:*", booking.UserID.String())
+	if keys, err := s.redisClient.Keys(ctx, userCachePattern).Result(); err == nil && len(keys) > 0 {
+		s.redisClient.Del(ctx, keys...)
+	}
+
+	// 4. Clear expert busy time cache
+	busyTimePattern := fmt.Sprintf("expert_busy:%s:*", booking.ExpertID.String())
+	if keys, err := s.redisClient.Keys(ctx, busyTimePattern).Result(); err == nil && len(keys) > 0 {
+		s.redisClient.Del(ctx, keys...)
+	}
+
+	return nil
 }
 
 // Helper function to convert Booking to BookingResponse

@@ -23,6 +23,11 @@ type CreateBookingRequest struct {
 
 // Validate validates the create booking request
 func (req *CreateBookingRequest) Validate() error {
+	// Nếu duration_minutes = 0 thì tự động tính
+	if req.DurationMinutes == 0 {
+		duration := int(req.EndTime.Sub(req.ScheduledTime).Minutes())
+		req.DurationMinutes = duration
+	}
 	if req.DurationMinutes < 15 || req.DurationMinutes > 480 {
 		return fmt.Errorf("duration must be between 15 and 480 minutes")
 	}

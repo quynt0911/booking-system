@@ -12,6 +12,7 @@ import (
 
 	"services/booking-service/internal/config"
 	"services/booking-service/internal/handler"
+	"services/booking-service/internal/listener"
 	"services/booking-service/internal/repository"
 	"services/booking-service/internal/routes"
 	"services/booking-service/internal/service"
@@ -52,6 +53,13 @@ func main() {
 	}
 	defer redisClient.Close()
 
+	// Initialize database listener
+	dbListener := listener.NewDBListener(cfg.Database.URL, redisClient)
+	if err := dbListener.Start(); err != nil {
+		log.Fatalf("Failed to start database listener: %v", err)
+	}
+	defer dbListener.Stop()
+
 	// Initialize repositories
 	bookingRepo := repository.NewBookingRepository(gormDB)
 	statusHistoryRepo := repository.NewStatusHistoryRepository(gormDB)
@@ -88,7 +96,7 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		appLogger.Info(fmt.Sprintf("Booking service starting on port %s", cfg.App.Port))
+		appLogger.Info(fmt.Sprintf("Booking service started on port %s", cfg.App.Port))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal("Failed to start server:", err)
 		}
@@ -99,7 +107,7 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	appLogger.Info("Shutting down booking service...")
+	appLogger.Info("Shuting down booking service...")
 
 	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

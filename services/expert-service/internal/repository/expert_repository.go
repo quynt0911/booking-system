@@ -15,6 +15,8 @@ type ExpertRepository interface {
 	Update(expert *model.Expert) error
 	Delete(id uuid.UUID) error
 	GetByExpertise(expertise string) ([]*model.Expert, error)
+	GetByUserID(userID uuid.UUID) (*model.Expert, error)
+	IsExpertProfileExists(userID uuid.UUID) (bool, error)
 }
 
 type expertRepository struct {
@@ -159,4 +161,36 @@ func (r *expertRepository) GetByExpertise(expertise string) ([]*model.Expert, er
 		experts = append(experts, expert)
 	}
 	return experts, nil
+}
+
+func (r *expertRepository) GetByUserID(userID uuid.UUID) (*model.Expert, error) {
+	var expert model.Expert
+	err := r.db.QueryRow(`
+		SELECT id, user_id, specialization, experience_years, hourly_rate, certifications, is_available, rating, total_reviews, created_at, updated_at 
+		FROM experts WHERE user_id = $1`, userID).Scan(
+		&expert.ID,
+		&expert.UserID,
+		&expert.Specialization,
+		&expert.ExperienceYears,
+		&expert.HourlyRate,
+		&expert.Certifications,
+		&expert.IsAvailable,
+		&expert.Rating,
+		&expert.TotalReviews,
+		&expert.CreatedAt,
+		&expert.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &expert, nil
+}
+
+func (r *expertRepository) IsExpertProfileExists(userID uuid.UUID) (bool, error) {
+	var count int
+	err := r.db.QueryRow("SELECT COUNT(1) FROM experts WHERE user_id = $1", userID).Scan(&count)
+	return count > 0, err
 }

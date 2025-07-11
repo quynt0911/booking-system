@@ -1,9 +1,12 @@
+// services/expert-service/internal/handler/availability_handler.go
 package handler
 
 import (
 	"encoding/json"
 	"expert-service/internal/model"
 	"expert-service/internal/service"
+	"expert-service/internal/utils" // Thêm import này
+	"log"
 	"net/http"
 	"time"
 
@@ -41,62 +44,6 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	}
 }
 
-// Availability represents expert availability
-type Availability struct {
-	ID        string    `json:"id"`
-	ExpertID  string    `json:"expert_id"`
-	Date      string    `json:"date"`
-	StartTime string    `json:"start_time"`
-	EndTime   string    `json:"end_time"`
-	IsBooked  bool      `json:"is_booked"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-// CreateAvailabilityRequest represents request body for creating availability
-type CreateAvailabilityRequest struct {
-	ExpertID  string `json:"expert_id" validate:"required"`
-	Date      string `json:"date" validate:"required"`
-	StartTime string `json:"start_time" validate:"required"`
-	EndTime   string `json:"end_time" validate:"required"`
-}
-
-// UpdateAvailabilityRequest represents request body for updating availability
-type UpdateAvailabilityRequest struct {
-	Date      string `json:"date,omitempty"`
-	StartTime string `json:"start_time,omitempty"`
-	EndTime   string `json:"end_time,omitempty"`
-	IsBooked  *bool  `json:"is_booked,omitempty"`
-}
-
-// CreateAvailability godoc
-// @Summary Create a new availability slot
-// @Description Create a new availability slot for an expert
-// @Tags availability
-// @Accept json
-// @Produce json
-// @Param availability body model.CreateAvailabilityRequest true "Availability details"
-// @Success 201 {object} model.Availability
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /api/v1/availability [post]
-func (h *AvailabilityHandler) CreateAvailability(c *gin.Context) {
-	var req model.CreateAvailabilityRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request body"})
-		return
-	}
-
-	availability, err := h.availabilityService.CreateAvailability(&req)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, availability)
-}
-
 // GetAvailabilities godoc
 // @Summary Get filtered availabilities
 // @Description Get availability slots with optional filters
@@ -106,8 +53,7 @@ func (h *AvailabilityHandler) CreateAvailability(c *gin.Context) {
 // @Param expert_id query string true "Expert ID"
 // @Param start_date query string true "Start date (YYYY-MM-DD)"
 // @Param end_date query string true "End date (YYYY-MM-DD)"
-// @Param is_booked query bool false "Filter by booking status"
-// @Success 200 {array} model.Availability
+// @Success 200 {array} model.AvailabilitySlot
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/availability [get]
@@ -140,183 +86,20 @@ func (h *AvailabilityHandler) GetAvailabilities(c *gin.Context) {
 		return
 	}
 
-	var isBooked *bool
-	if isBookedStr := c.Query("is_booked"); isBookedStr != "" {
-		booked := isBookedStr == "true"
-		isBooked = &booked
+	// Validate: end_date must be >= start_date
+	if endDate.Before(startDate) {
+		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{Message: "end_date must be greater than or equal to start_date"})
+		return
 	}
 
-	availabilities, err := h.availabilityService.GetAvailabilities(expertID, startDate, endDate, isBooked)
+	slots, err := h.availabilityService.GetAvailabilities(expertID, startDate, endDate, nil, "")
 	if err != nil {
+		log.Printf("Error getting availabilities: %v", err)
 		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, availabilities)
-}
-
-// GetAvailabilityByID godoc
-// @Summary Get availability by ID
-// @Description Get a specific availability slot by its ID
-// @Tags availability
-// @Accept json
-// @Produce json
-// @Param id path string true "Availability ID"
-// @Success 200 {object} model.Availability
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /api/v1/availability/{id} [get]
-func (h *AvailabilityHandler) GetAvailabilityByID(c *gin.Context) {
-	id := c.Param("id")
-
-	availability, err := h.availabilityService.GetAvailabilityByID(id)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
-		return
-	}
-	if availability == nil {
-		c.AbortWithStatusJSON(http.StatusNotFound, ErrorResponse{Message: "Availability not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, availability)
-}
-
-// UpdateAvailability godoc
-// @Summary Update availability
-// @Description Update an existing availability slot
-// @Tags availability
-// @Accept json
-// @Produce json
-// @Param id path string true "Availability ID"
-// @Param availability body model.UpdateAvailabilityRequest true "Updated availability details"
-// @Success 200 {object} model.Availability
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /api/v1/availability/{id} [put]
-func (h *AvailabilityHandler) UpdateAvailability(c *gin.Context) {
-	id := c.Param("id")
-
-	var req model.UpdateAvailabilityRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request body"})
-		return
-	}
-
-	availability, err := h.availabilityService.UpdateAvailability(id, &req)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
-		return
-	}
-	if availability == nil {
-		c.AbortWithStatusJSON(http.StatusNotFound, ErrorResponse{Message: "Availability not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, availability)
-}
-
-// DeleteAvailability godoc
-// @Summary Delete availability
-// @Description Delete an availability slot
-// @Tags availability
-// @Accept json
-// @Produce json
-// @Param id path string true "Availability ID"
-// @Success 204 "No Content"
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /api/v1/availability/{id} [delete]
-func (h *AvailabilityHandler) DeleteAvailability(c *gin.Context) {
-	id := c.Param("id")
-
-	if err := h.availabilityService.DeleteAvailability(id); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
-		return
-	}
-
-	c.Status(http.StatusNoContent)
-}
-
-// BookAvailability godoc
-// @Summary Book availability
-// @Description Book an availability slot
-// @Tags availability
-// @Accept json
-// @Produce json
-// @Param id path string true "Availability ID"
-// @Success 200 {object} model.Availability
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /api/v1/availability/{id}/book [post]
-func (h *AvailabilityHandler) BookAvailability(c *gin.Context) {
-	id := c.Param("id")
-
-	if err := h.availabilityService.BookAvailability(id); err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
-		return
-	}
-
-	c.Status(http.StatusOK)
-}
-
-// CreateRecurringAvailability godoc
-// @Summary Create recurring availability
-// @Description Create multiple availability slots for recurring schedules
-// @Tags availability
-// @Accept json
-// @Produce json
-// @Param availability body model.CreateRecurringAvailabilityRequest true "Recurring availability details"
-// @Success 201 {array} model.Availability
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /api/v1/availability/recurring [post]
-func (h *AvailabilityHandler) CreateRecurringAvailability(c *gin.Context) {
-	var req model.CreateRecurringAvailabilityRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request body"})
-		return
-	}
-
-	availabilities, err := h.availabilityService.CreateRecurringAvailability(&req)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, availabilities)
-}
-
-// CheckAvailability godoc
-// @Summary Check availability for a time slot
-// @Description Check if an expert is available at a specific time slot
-// @Tags availability
-// @Accept json
-// @Produce json
-// @Param availability body model.CheckAvailabilityRequest true "Availability check details"
-// @Success 200 {object} bool "true if available, false otherwise"
-// @Failure 400 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /api/v1/availability/check [post]
-func (h *AvailabilityHandler) CheckAvailability(c *gin.Context) {
-	var req model.CheckAvailabilityRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request body"})
-		return
-	}
-
-	isAvailable, err := h.availabilityService.CheckAvailability(&req)
-	if err != nil {
-		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, isAvailable)
+	c.JSON(http.StatusOK, slots)
 }
 
 // CreateOffTime godoc
@@ -343,21 +126,152 @@ func (h *AvailabilityHandler) CreateOffTime(c *gin.Context) {
 		return
 	}
 
+	// Sau khi tạo off-time, sinh lại availability cho 14 ngày tới
+	startDate := time.Now()
+	endDate := startDate.AddDate(0, 0, 14)
+
+	// Tạo service token cho internal call
+	serviceToken, err := utils.GenerateServiceToken("expert-service")
+	if err != nil {
+		log.Printf("Error generating service token: %v", err)
+		// Không return error ở đây vì off-time đã được tạo thành công
+	} else {
+		slots, err := h.availabilityService.GetAvailabilities(req.ExpertID, startDate, endDate, nil, serviceToken)
+		if err == nil {
+			for _, slot := range slots {
+				key := "availability:" + req.ExpertID + ":" + slot.Date
+				data, _ := json.Marshal(slot)
+				h.availabilityService.(interface {
+					SetAvailability(key string, value []byte) error
+				}).SetAvailability(key, data)
+			}
+		}
+	}
+
 	c.JSON(http.StatusCreated, offTime)
 }
 
+// Các method khác giữ nguyên không đổi...
+// CreateAvailability, GetAvailabilityByID, UpdateAvailability, DeleteAvailability,
+// BookAvailability, CreateRecurringAvailability, CheckAvailability,
+// GetExpertOffTimes, DeleteOffTime, RegisterRoutes
+
+// CreateAvailability godoc
+func (h *AvailabilityHandler) CreateAvailability(c *gin.Context) {
+	var req model.CreateAvailabilityRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request body"})
+		return
+	}
+
+	availability, err := h.availabilityService.CreateAvailability(&req)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, availability)
+}
+
+// GetAvailabilityByID godoc
+func (h *AvailabilityHandler) GetAvailabilityByID(c *gin.Context) {
+	id := c.Param("id")
+
+	availability, err := h.availabilityService.GetAvailabilityByID(id)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
+		return
+	}
+	if availability == nil {
+		c.AbortWithStatusJSON(http.StatusNotFound, ErrorResponse{Message: "Availability not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, availability)
+}
+
+// UpdateAvailability godoc
+func (h *AvailabilityHandler) UpdateAvailability(c *gin.Context) {
+	id := c.Param("id")
+
+	var req model.UpdateAvailabilityRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request body"})
+		return
+	}
+
+	availability, err := h.availabilityService.UpdateAvailability(id, &req)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
+		return
+	}
+	if availability == nil {
+		c.AbortWithStatusJSON(http.StatusNotFound, ErrorResponse{Message: "Availability not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, availability)
+}
+
+// DeleteAvailability godoc
+func (h *AvailabilityHandler) DeleteAvailability(c *gin.Context) {
+	id := c.Param("id")
+
+	if err := h.availabilityService.DeleteAvailability(id); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// BookAvailability godoc
+func (h *AvailabilityHandler) BookAvailability(c *gin.Context) {
+	id := c.Param("id")
+
+	if err := h.availabilityService.BookAvailability(id); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
+		return
+	}
+
+	c.Status(http.StatusOK)
+}
+
+// CreateRecurringAvailability godoc
+func (h *AvailabilityHandler) CreateRecurringAvailability(c *gin.Context) {
+	var req model.CreateRecurringAvailabilityRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request body"})
+		return
+	}
+
+	availabilities, err := h.availabilityService.CreateRecurringAvailability(&req)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, availabilities)
+}
+
+// CheckAvailability godoc
+func (h *AvailabilityHandler) CheckAvailability(c *gin.Context) {
+	var req model.CheckAvailabilityRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, ErrorResponse{Message: "Invalid request body"})
+		return
+	}
+
+	isAvailable, err := h.availabilityService.CheckAvailability(&req)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, ErrorResponse{Message: err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, isAvailable)
+}
+
 // GetExpertOffTimes godoc
-// @Summary Get off-times for an expert
-// @Description Get all off-time periods for a specific expert
-// @Tags availability
-// @Accept json
-// @Produce json
-// @Param expert_id path string true "Expert ID"
-// @Success 200 {array} model.OffTime
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /api/v1/availability/off-time/{expert_id} [get]
 func (h *AvailabilityHandler) GetExpertOffTimes(c *gin.Context) {
 	expertID := c.Param("expert_id")
 	if expertID == "" {
@@ -375,17 +289,6 @@ func (h *AvailabilityHandler) GetExpertOffTimes(c *gin.Context) {
 }
 
 // DeleteOffTime godoc
-// @Summary Delete an off-time entry
-// @Description Delete a specific off-time entry by its ID
-// @Tags availability
-// @Accept json
-// @Produce json
-// @Param id path string true "Off-time ID"
-// @Success 204 "No Content"
-// @Failure 400 {object} ErrorResponse
-// @Failure 404 {object} ErrorResponse
-// @Failure 500 {object} ErrorResponse
-// @Router /api/v1/availability/off-time/{id} [delete]
 func (h *AvailabilityHandler) DeleteOffTime(c *gin.Context) {
 	id := c.Param("id")
 

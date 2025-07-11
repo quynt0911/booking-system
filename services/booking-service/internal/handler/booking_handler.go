@@ -33,26 +33,39 @@ func NewBookingHandler(
 
 // CreateBooking creates a new booking
 func (h *BookingHandler) CreateBooking(c *gin.Context) {
+	h.logger.Info("Starting CreateBooking handler")
+
 	userID, exists := c.Get("user_id")
 	if !exists {
+		h.logger.Error("User ID not found in context", nil)
 		c.JSON(http.StatusUnauthorized, utils.ErrorResponse("Unauthorized"))
 		return
 	}
+	h.logger.Info("User ID found in context", map[string]interface{}{"user_id": userID})
 
 	var req model.CreateBookingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		h.logger.Error("Failed to bind JSON request", err)
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid request format"))
 		return
 	}
+	h.logger.Info("Request bound successfully", map[string]interface{}{"request": req})
 
 	// Validate request
 	if err := req.Validate(); err != nil {
+		h.logger.Error("Request validation failed", err)
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse(err.Error()))
 		return
 	}
+	h.logger.Info("Request validated successfully")
 
 	// Calculate end time from scheduled time and duration
 	endTime := req.ScheduledTime.Add(time.Duration(req.DurationMinutes) * time.Minute)
+	h.logger.Info("Calculated end time", map[string]interface{}{
+		"start_time": req.ScheduledTime,
+		"duration":   req.DurationMinutes,
+		"end_time":   endTime,
+	})
 
 	// Check for conflicts
 	hasConflict, err := h.conflictChecker.CheckBookingConflict(
@@ -63,9 +76,10 @@ func (h *BookingHandler) CreateBooking(c *gin.Context) {
 	)
 	if err != nil {
 		h.logger.Error("Failed to check booking conflict", err)
-		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Internal server error"))
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse(err.Error()))
 		return
 	}
+	h.logger.Info("Conflict check completed", map[string]interface{}{"has_conflict": hasConflict})
 
 	if hasConflict {
 		c.JSON(http.StatusConflict, utils.ErrorResponse("Time slot is already booked"))
@@ -79,6 +93,7 @@ func (h *BookingHandler) CreateBooking(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to create booking"))
 		return
 	}
+	h.logger.Info("Booking created successfully", map[string]interface{}{"booking_id": booking.ID})
 
 	c.JSON(http.StatusCreated, utils.SuccessResponse("Booking created successfully", booking))
 }
@@ -154,7 +169,7 @@ func (h *BookingHandler) UpdateBooking(c *gin.Context) {
 	booking, err := h.bookingService.UpdateBooking(bookingID, &req)
 	if err != nil {
 		h.logger.Error("Failed to update booking", err)
-		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to update booking"))
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse(err.Error()))
 		return
 	}
 
@@ -211,6 +226,33 @@ func (h *BookingHandler) CancelBooking(c *gin.Context) {
 	c.JSON(http.StatusOK, utils.SuccessResponse("Booking cancelled successfully", nil))
 }
 
+// DeleteBooking deletes a booking (admin only)
+func (h *BookingHandler) DeleteBooking(c *gin.Context) {
+	userRole, _ := c.Get("user_role")
+
+	// Only admin can delete bookings
+	if userRole != "admin" {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Only admin can delete bookings"))
+		return
+	}
+
+	bookingIDStr := c.Param("id")
+	bookingID, err := uuid.Parse(bookingIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid booking ID"))
+		return
+	}
+
+	// Delete booking and clear cache
+	if err := h.bookingService.DeleteBooking(bookingID); err != nil {
+		h.logger.Error("Failed to delete booking", err)
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to delete booking"))
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.SuccessResponse("Booking deleted successfully", nil))
+}
+
 // GetUserBookings retrieves bookings for a user
 func (h *BookingHandler) GetUserBookings(c *gin.Context) {
 	userID, _ := c.Get("user_id")
@@ -249,7 +291,38 @@ func (h *BookingHandler) GetUserBookings(c *gin.Context) {
 
 // GetExpertBookings retrieves bookings for an expert
 func (h *BookingHandler) GetExpertBookings(c *gin.Context) {
-	expertID, _ := c.Get("user_id")
+	userID, _ := c.Get("user_id")
+	userRole, _ := c.Get("user_role")
+
+	// Cho phép expert, admin hoặc service calls
+	if userRole != "expert" && userRole != "admin" && userRole != "service" {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Access denied"))
+		return
+	}
+
+	// Nếu là service call, lấy expert_id từ query parameter
+	var expertID uuid.UUID
+	var err error
+
+	if userRole == "service" {
+		expertIDStr := c.Query("expert_id")
+		if expertIDStr == "" {
+			c.JSON(http.StatusBadRequest, utils.ErrorResponse("expert_id is required for service calls"))
+			return
+		}
+		expertID, err = uuid.Parse(expertIDStr)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid expert_id"))
+			return
+		}
+	} else {
+		// Mapping user_id -> expert_id cho user calls
+		expertID, err = h.bookingService.GetExpertIDByUserID(userID.(uuid.UUID))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Cannot find expert for this user"))
+			return
+		}
+	}
 
 	var req model.GetBookingsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -265,7 +338,7 @@ func (h *BookingHandler) GetExpertBookings(c *gin.Context) {
 		req.Limit = 10
 	}
 
-	bookings, total, err := h.bookingService.GetExpertBookings(expertID.(uuid.UUID), &req)
+	bookings, total, err := h.bookingService.GetExpertBookings(expertID, &req)
 	if err != nil {
 		h.logger.Error("Failed to get expert bookings", err)
 		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to retrieve bookings"))

@@ -50,6 +50,7 @@ type BookingRepositoryInterface interface {
 	// System operations
 	GetUpcomingBookings(minutes int) ([]model.Booking, error)
 	GetExpiredBookings() ([]model.Booking, error)
+	GetExpertIDByUserID(userID uuid.UUID) (uuid.UUID, error)
 }
 
 // bookingRepository struct implement BookingRepositoryInterface
@@ -737,4 +738,13 @@ func (r *bookingRepository) GetUserStatistics(userID uuid.UUID, period string, y
 	}
 
 	return stats, nil
+}
+
+func (r *bookingRepository) GetExpertIDByUserID(userID uuid.UUID) (uuid.UUID, error) {
+	var expert struct{ ID uuid.UUID }
+	err := r.db.Table("experts").Select("id").Where("user_id = ?", userID).Scan(&expert).Error
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return expert.ID, nil
 }

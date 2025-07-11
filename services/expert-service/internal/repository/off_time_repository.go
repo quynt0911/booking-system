@@ -13,6 +13,7 @@ type OffTimeRepository interface {
 	GetByExpertID(expertID uuid.UUID) ([]*model.OffTime, error)
 	GetByExpertIDAndDateRange(expertID uuid.UUID, date time.Time) ([]*model.OffTime, error)
 	Delete(id uuid.UUID) error
+	GetByID(id uuid.UUID) (*model.OffTime, error)
 }
 
 type offTimeRepository struct {
@@ -67,11 +68,14 @@ func (r *offTimeRepository) GetByExpertID(expertID uuid.UUID) ([]*model.OffTime,
 }
 
 func (r *offTimeRepository) GetByExpertIDAndDateRange(expertID uuid.UUID, date time.Time) ([]*model.OffTime, error) {
+	// Lấy tất cả off-time của expert trong ngày đó (có thể lấy rộng hơn nếu muốn)
+	startOfDay := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, time.UTC)
+	endOfDay := startOfDay.Add(24 * time.Hour)
 	query := `
 		SELECT id, expert_id, start_datetime, end_datetime, reason, is_recurring, created_at
 		FROM expert_off_times 
-		WHERE expert_id = $1 AND start_datetime <= $2 AND end_datetime >= $2`
-	rows, err := r.db.Query(query, expertID, date)
+		WHERE expert_id = $1 AND end_datetime > $2 AND start_datetime < $3`
+	rows, err := r.db.Query(query, expertID, startOfDay, endOfDay)
 	if err != nil {
 		return nil, err
 	}
@@ -108,4 +112,19 @@ func (r *offTimeRepository) Delete(id uuid.UUID) error {
 		return sql.ErrNoRows
 	}
 	return nil
+}
+
+func (r *offTimeRepository) GetByID(id uuid.UUID) (*model.OffTime, error) {
+	query := `SELECT id, expert_id, start_datetime, end_datetime, reason, is_recurring, created_at FROM expert_off_times WHERE id = $1`
+	offTime := &model.OffTime{}
+	err := r.db.QueryRow(query, id).Scan(
+		&offTime.ID, &offTime.ExpertID,
+		&offTime.StartDateTime, &offTime.EndDateTime,
+		&offTime.Reason, &offTime.IsRecurring,
+		&offTime.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return offTime, nil
 }
