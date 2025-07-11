@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"services/user-service/model"
+	"user-service/model"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"

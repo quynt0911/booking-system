@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -50,7 +51,7 @@ func (h *StatusHandler) UpdateBookingStatus(c *gin.Context) {
 	bookingIDStr := c.Param("id")
 	bookingID, err := uuid.Parse(bookingIDStr)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid booking ID"))
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid booking ID format"))
 		return
 	}
 
@@ -59,13 +60,13 @@ func (h *StatusHandler) UpdateBookingStatus(c *gin.Context) {
 
 	var req UpdateStatusRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid request format"))
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid request format: status is required"))
 		return
 	}
 
 	// Validate status
 	if !isValidBookingStatus(req.Status) {
-		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid booking status"))
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid booking status value"))
 		return
 	}
 
@@ -78,16 +79,32 @@ func (h *StatusHandler) UpdateBookingStatus(c *gin.Context) {
 		req.Note,
 	)
 	if err != nil {
-		switch err.Error() {
-		case "booking not found":
+		switch {
+		case err.Error() == "booking not found":
 			c.JSON(http.StatusNotFound, utils.ErrorResponse("Booking not found"))
-		case "access denied":
-			c.JSON(http.StatusForbidden, utils.ErrorResponse("Access denied"))
-		case "invalid status transition":
-			c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid status transition"))
+		case err.Error() == "access denied" || err.Error() == "user is not authorized to update this booking status":
+			c.JSON(http.StatusForbidden, utils.ErrorResponse("You are not authorized to update this booking's status"))
+		case err.Error() == "failed to get expert ID":
+			c.JSON(http.StatusBadRequest, utils.ErrorResponse("Could not verify expert authorization"))
+		case err.Error() == "invalid status transition from pending to completed":
+			c.JSON(http.StatusBadRequest, utils.ErrorResponse("Cannot change status from pending to completed directly"))
+		case err.Error() == "invalid status transition from confirmed to pending":
+			c.JSON(http.StatusBadRequest, utils.ErrorResponse("Cannot change status from confirmed back to pending"))
+		case err.Error() == "invalid status transition from completed to pending":
+			c.JSON(http.StatusBadRequest, utils.ErrorResponse("Cannot change status from completed back to pending"))
+		case err.Error() == "invalid status transition from cancelled to pending":
+			c.JSON(http.StatusBadRequest, utils.ErrorResponse("Cannot change status from cancelled back to pending"))
+		case err.Error() == "invalid status transition from completed to confirmed":
+			c.JSON(http.StatusBadRequest, utils.ErrorResponse("Cannot change status from completed back to confirmed"))
+		case err.Error() == "invalid status transition from cancelled to confirmed":
+			c.JSON(http.StatusBadRequest, utils.ErrorResponse("Cannot change status from cancelled back to confirmed"))
+		case err.Error() == "invalid status transition from completed to cancelled":
+			c.JSON(http.StatusBadRequest, utils.ErrorResponse("Cannot cancel a completed booking"))
+		case err.Error() == "invalid status transition":
+			c.JSON(http.StatusBadRequest, utils.ErrorResponse("This status transition is not allowed"))
 		default:
 			h.logger.Error("Failed to update booking status", err)
-			c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to update status"))
+			c.JSON(http.StatusInternalServerError, utils.ErrorResponse(fmt.Sprintf("Failed to update status: %v", err)))
 		}
 		return
 	}

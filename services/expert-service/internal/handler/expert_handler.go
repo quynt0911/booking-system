@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"expert-service/internal/model"
 	"expert-service/internal/service"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -37,6 +38,34 @@ func isValidExpertUserID(db *sql.DB, userID string) (bool, error) {
 
 // CreateExpert handles expert creation.
 func (h *ExpertHandler) CreateExpert(c *gin.Context) {
+	userIDVal, exists := c.Get("user_id")
+	if !exists || userIDVal == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user_id missing in context"})
+		return
+	}
+	userIDStr, ok := userIDVal.(string)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user_id in context is not a string"})
+		return
+	}
+	userUUID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user_id format"})
+		return
+	}
+
+	fmt.Println("DEBUG: userUUID =", userUUID)
+	exists, err = h.expertService.IsExpertProfileExists(userUUID)
+	fmt.Println("DEBUG: exists =", exists, "err =", err)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		return
+	}
+	if exists {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Expert profile already exists for this user"})
+		return
+	}
+
 	var req model.CreateExpertRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request: " + err.Error()})

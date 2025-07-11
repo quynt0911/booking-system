@@ -2,9 +2,9 @@ package service
 
 import (
 	"errors"
-	"services/user-service/model"
-	"services/user-service/repository"
-	"services/user-service/utils"
+	"user-service/model"
+	"user-service/repository"
+	"user-service/utils"
 
 	"github.com/google/uuid"
 )

@@ -64,7 +64,7 @@ func (r *statusHistoryRepository) GetByBookingID(bookingID uuid.UUID) ([]model.S
 	var histories []model.StatusHistory
 
 	err := r.db.Where("booking_id = ?", bookingID).
-		Order("changed_at DESC").
+		Order("created_at DESC").
 		Find(&histories).Error
 
 	return histories, err
@@ -200,16 +200,16 @@ func (r *statusHistoryRepository) applyPagination(query *gorm.DB, filter *model.
 	return query
 }
 
-// CreateStatusHistory helper function to create status history
+// CreateStatusHistory creates a new status history record
 func (r *statusHistoryRepository) CreateStatusHistory(bookingID uuid.UUID, oldStatus, newStatus model.BookingStatus, changedBy uuid.UUID, changeType, reason, notes string) error {
 	history := &model.StatusHistory{
 		BookingID: bookingID,
-		Status:    newStatus,
+		OldStatus: oldStatus,
+		NewStatus: newStatus,
 		ChangedBy: changedBy,
-		ChangedAt: time.Now(),
-		Note:      notes,
+		Reason:    reason,
+		CreatedAt: time.Now(),
 	}
-
 	return r.Create(history)
 }
 
@@ -331,24 +331,76 @@ func (r *statusHistoryRepository) GetByExpertID(expertID uuid.UUID) ([]model.Sta
 
 // GetHistoryByUserID gets status history by user ID with pagination
 func (r *statusHistoryRepository) GetHistoryByUserID(userID uuid.UUID, req *model.GetHistoryRequest) ([]model.StatusHistory, int64, error) {
-	filter := &model.StatusHistoryFilter{
-		ChangedBy: &userID,
-		Page:      req.Page,
-		Limit:     req.Limit,
-		StartDate: req.StartDate,
-		EndDate:   req.EndDate,
+	var histories []model.StatusHistory
+	var total int64
+
+	query := r.db.Table("booking_status_history h").
+		Joins("JOIN bookings b ON h.booking_id = b.id").
+		Where("b.user_id = ?", userID)
+
+	// Apply filters
+	if req.NewStatus != nil {
+		query = query.Where("h.new_status = ?", *req.NewStatus)
 	}
-	return r.List(filter)
+	if req.StartDate != nil {
+		query = query.Where("h.created_at >= ?", *req.StartDate)
+	}
+	if req.EndDate != nil {
+		query = query.Where("h.created_at <= ?", *req.EndDate)
+	}
+
+	// Count total
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Apply pagination
+	offset := (req.Page - 1) * req.Limit
+	query = query.Offset(offset).Limit(req.Limit)
+
+	// Get histories
+	err := query.Order("h.created_at DESC").Find(&histories).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return histories, total, nil
 }
 
 // GetHistoryByExpertID gets status history by expert ID with pagination
 func (r *statusHistoryRepository) GetHistoryByExpertID(expertID uuid.UUID, req *model.GetHistoryRequest) ([]model.StatusHistory, int64, error) {
-	filter := &model.StatusHistoryFilter{
-		ChangedBy: &expertID,
-		Page:      req.Page,
-		Limit:     req.Limit,
-		StartDate: req.StartDate,
-		EndDate:   req.EndDate,
+	var histories []model.StatusHistory
+	var total int64
+
+	query := r.db.Table("booking_status_history h").
+		Joins("JOIN bookings b ON h.booking_id = b.id").
+		Where("b.expert_id = ?", expertID)
+
+	// Apply filters
+	if req.NewStatus != nil {
+		query = query.Where("h.new_status = ?", *req.NewStatus)
 	}
-	return r.List(filter)
+	if req.StartDate != nil {
+		query = query.Where("h.created_at >= ?", *req.StartDate)
+	}
+	if req.EndDate != nil {
+		query = query.Where("h.created_at <= ?", *req.EndDate)
+	}
+
+	// Count total
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Apply pagination
+	offset := (req.Page - 1) * req.Limit
+	query = query.Offset(offset).Limit(req.Limit)
+
+	// Get histories
+	err := query.Order("h.created_at DESC").Find(&histories).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return histories, total, nil
 }

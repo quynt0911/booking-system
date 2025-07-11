@@ -17,6 +17,8 @@ type ExpertService interface {
 	UpdateExpert(id uuid.UUID, req *model.UpdateExpertRequest) error
 	DeleteExpert(id uuid.UUID) error
 	GetExpertsByExpertise(expertise string) ([]*model.Expert, error)
+	GetExpertIDByUserID(userID string) (string, error)
+	IsExpertProfileExists(userID uuid.UUID) (bool, error)
 }
 
 type expertService struct {
@@ -128,4 +130,25 @@ func (s *expertService) DeleteExpert(id uuid.UUID) error {
 
 func (s *expertService) GetExpertsByExpertise(expertise string) ([]*model.Expert, error) {
 	return s.expertRepo.GetByExpertise(expertise)
+}
+
+func (s *expertService) GetExpertIDByUserID(userID string) (string, error) {
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return "", fmt.Errorf("invalid user ID format: %v", err)
+	}
+
+	expert, err := s.expertRepo.GetByUserID(userUUID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get expert: %v", err)
+	}
+	if expert == nil {
+		return "", fmt.Errorf("expert not found for user ID %s", userID)
+	}
+
+	return expert.ID.String(), nil
+}
+
+func (s *expertService) IsExpertProfileExists(userID uuid.UUID) (bool, error) {
+	return s.expertRepo.IsExpertProfileExists(userID)
 }

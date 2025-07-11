@@ -16,3 +16,9 @@ type Availability struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
 }
+
+type AvailabilitySlot struct {
+	Date      string `json:"date"`       // "2024-03-25"
+	StartTime string `json:"start_time"` // "09:00"
+	EndTime   string `json:"end_time"`   // "10:00"
+}

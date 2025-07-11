@@ -2,18 +2,26 @@ package routes
 
 import (
 	"expert-service/internal/handler"
+	"expert-service/internal/middleware"
+	"expert-service/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
 
 func SetupRoutes(
 	router *gin.Engine,
-	expertHandler *handler.ExpertHandler,
-	scheduleHandler *handler.ScheduleHandler,
-	availabilityHandler *handler.AvailabilityHandler,
+	expertService service.ExpertService,
+	expertScheduleService service.ExpertScheduleService,
+	availabilityService service.ExpertAvailabilityService,
 ) {
+	// Initialize handlers
+	expertHandler := handler.NewExpertHandler(expertService)
+	expertScheduleHandler := handler.NewExpertScheduleHandler(expertScheduleService, availabilityService)
+	availabilityHandler := handler.NewAvailabilityHandler(availabilityService)
+	offTimeHandler := handler.NewOffTimeHandler(availabilityService, expertService)
+
 	// Expert routes
-	experts := router.Group("/api/experts")
+	experts := router.Group("/experts", middleware.JWTAuthMiddleware())
 	{
 		experts.POST("", expertHandler.CreateExpert)
 		experts.GET("", expertHandler.GetExperts)
@@ -23,30 +31,30 @@ func SetupRoutes(
 		experts.GET("/expertise", expertHandler.GetExpertsByExpertise)
 	}
 
-	// Schedule routes
-	schedules := router.Group("/api/schedules")
-	{
-		schedules.POST("", scheduleHandler.CreateSchedule)
-		schedules.GET("", scheduleHandler.GetSchedules)
-		schedules.GET("/:id", scheduleHandler.GetScheduleByID)
-		schedules.PUT("/:id", scheduleHandler.UpdateSchedule)
-		schedules.DELETE("/:id", scheduleHandler.DeleteSchedule)
-		schedules.GET("/upcoming", scheduleHandler.GetUpcomingSchedules)
-	}
-
 	// Availability routes
-	availability := router.Group("/api/v1/availability")
+	availability := router.Group("/availability")
 	{
-		availability.POST("", availabilityHandler.CreateAvailability)
 		availability.GET("", availabilityHandler.GetAvailabilities)
 		availability.GET("/:id", availabilityHandler.GetAvailabilityByID)
-		availability.PUT("/:id", availabilityHandler.UpdateAvailability)
-		availability.DELETE("/:id", availabilityHandler.DeleteAvailability)
-		availability.POST("/:id/book", availabilityHandler.BookAvailability)
-		availability.POST("/recurring", availabilityHandler.CreateRecurringAvailability)
 		availability.POST("/check", availabilityHandler.CheckAvailability)
-		availability.POST("/off-time", availabilityHandler.CreateOffTime)
-		availability.GET("/off-time/:expert_id", availabilityHandler.GetExpertOffTimes)
-		availability.DELETE("/off-time/:id", availabilityHandler.DeleteOffTime)
+	}
+
+	// OffTime routes (tách riêng)
+	offTime := router.Group("/off-time")
+	offTime.Use(middleware.JWTAuthMiddleware())
+	{
+		offTime.POST("", offTimeHandler.CreateOffTime)
+		offTime.GET(":expert_id", offTimeHandler.GetExpertOffTimes)
+		offTime.GET("/detail/:id", offTimeHandler.GetOffTimeByID)
+		offTime.DELETE(":id", offTimeHandler.DeleteOffTime)
+	}
+
+	// Expert Schedule routes
+	expertSchedules := router.Group("/expert-schedules")
+	{
+		expertSchedules.POST("", expertScheduleHandler.CreateSchedule)
+		expertSchedules.GET("", expertScheduleHandler.GetSchedulesByExpertID)
+		expertSchedules.PUT("/:id", expertScheduleHandler.UpdateSchedule)
+		expertSchedules.DELETE("/:id", expertScheduleHandler.DeleteSchedule)
 	}
 }
