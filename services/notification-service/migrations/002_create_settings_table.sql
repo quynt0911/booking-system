@@ -1,0 +1,5 @@
+-- CREATE TABLE settings (
+-- 	user_id UUID PRIMARY KEY,
+-- 	subscribed BOOLEAN DEFAULT TRUE,
+-- 	updated_at TIMESTAMP DEFAULT NOW()
+-- );

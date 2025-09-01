@@ -1,0 +1,6 @@
+-- CREATE TABLE jobs (
+-- 	id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+-- 	type VARCHAR(50) NOT NULL,
+-- 	status VARCHAR(20) DEFAULT 'pending',
+-- 	executed_at TIMESTAMP DEFAULT NOW()
+-- );

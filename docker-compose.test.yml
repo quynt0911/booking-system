@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  notification-service:
+    build:
+      context: ./services/notification-service
+      dockerfile: Dockerfile
+    ports:
+      - "8084:8084"
+    environment:
+      - ENV=test
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+
+  worker-service:
+    build:
+      context: ./services/worker-service
+      dockerfile: Dockerfile
+    ports:
+      - "8085:8085"
+    environment:
+      - ENV=test
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+
+  postgres:
+    image: postgres:14
+    environment:
+      - POSTGRES_USER=test
+      - POSTGRES_PASSWORD=test
+      - POSTGRES_DB=test
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:6
+    ports:
+      - "6379:6379" 
